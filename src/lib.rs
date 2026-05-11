@@ -1,6 +1,8 @@
 pub mod cli;
 pub mod http;
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 use cli::{Cli, Command};
 use http::{Client, CommandsBody, DEFAULT_URL, HealthBody};
@@ -43,11 +45,14 @@ pub fn run(cli: Cli) -> Result<()> {
         }
         Command::Execute(args) => {
             //TODO: 文字列->パラメータ列へのデシリアライズが必要
+            // Vec<(String, String)> → HashMap<String, String>
+            let args_map: HashMap<String, String> = args.args.into_iter().collect();
             let body: ExecuteBody = ExecuteBody {
                 path: args.path,
-                args: args.args,
+                args: args_map,
             };
-            let res: Result<ExecuteResponse, Error> = client.post_execute("/api/v1/execute", body);
+            let res: Result<ExecuteResponse, Error> = client.post_execute("/api/v1/execute", &body);
+            println!("{:?}", res);
         }
     }
 

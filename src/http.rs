@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::Duration;
-use ureq::{Agent, Error, RequestBuilder, http::Response, typestate::WithoutBody};
+use std::{collections::HashMap, time::Duration};
+use ureq::{Agent, Error, RequestBuilder, typestate::WithoutBody};
 
 pub(crate) const DEFAULT_URL: &str = "http://127.0.0.1:7610";
 
@@ -70,13 +70,7 @@ pub(crate) struct HealthBody {
 #[derive(Debug, Serialize)]
 pub(crate) struct ExecuteBody {
     pub path: String,
-    pub args: Vec<ExecuteArgs>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct ExecuteArgs {
-    name: String,
-    value: String,
+    pub args: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,7 +85,7 @@ pub(crate) struct ExecuteResponse {
     pub exception_type: Option<String>,
     #[serde(default)]
     pub stack_trace: Option<String>,
-    pub duration_ms: u64,
+    pub duration_ms: f64,
     #[serde(default)]
     pub logs: Vec<LogEntry>,
 }

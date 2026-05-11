@@ -34,11 +34,25 @@ pub(crate) enum Command {
 impl Command {}
 
 #[derive(Args)]
-pub(crate) struct ExecArgs {
-    /// 実行対象コマンドのパス
+pub struct ExecArgs {
+    /// 実行するコマンドのパス
     pub path: String,
-    /// コマンドに渡すパラメータ
-    pub args: Option<String>,
+
+    /// 引数 (KEY=VALUE 形式、複数指定可)
+    #[arg(value_parser = parse_key_val)]
+    pub args: Vec<(String, String)>,
+}
+
+/// "key=value" を (String, String) にパース
+fn parse_key_val(s: &str) -> Result<(String, String), String> {
+    let (key, value) = s
+        .split_once('=')
+        .ok_or_else(|| format!("'{s}' は KEY=VALUE 形式である必要があります"))?;
+
+    if key.is_empty() {
+        return Err(format!("key が空です: '{s}'"));
+    }
+    Ok((key.to_string(), value.to_string()))
 }
 
 // 単体テスト
