@@ -7,7 +7,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub base_url: Option<String>,
     #[arg(long, global = true)]
-    pub json: Option<bool>,
+    pub json: bool,
 
     // サブコマンド
     #[command(subcommand)]
@@ -37,4 +37,26 @@ pub(crate) struct ExecArgs {
     pub path: String,
     /// コマンドに渡すパラメータ
     pub params: Option<String>,
+}
+
+// 単体テスト
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn cli_グローバルパラメータをパースできる() {
+        let cli = Cli::try_parse_from([
+            "liminal",
+            "health",
+            "--base-url",
+            "http://127.0.0.1:7610",
+            "--json",
+        ])
+        .unwrap();
+
+        assert_eq!(cli.base_url.unwrap(), "http://127.0.0.1:7610");
+        assert!(cli.json);
+    }
 }
