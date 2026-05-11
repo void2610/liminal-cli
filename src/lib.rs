@@ -22,14 +22,17 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Health => {
             // ヘルスチェック
-            let health: HealthBody = client.get("/api/v1/health")
+            let health: HealthBody = client
+                .get("/api/v1/health")
                 .call()?
                 .body_mut()
                 .read_json::<HealthBody>()?;
             println!("{:?}", health);
         }
         Command::Commands => {
-            let commands: CommandsBody = client.get("/api/v1/commands")
+            // コマンド一覧
+            let commands: CommandsBody = client
+                .get("/api/v1/commands")
                 .call()?
                 .body_mut()
                 .read_json::<CommandsBody>()?;
