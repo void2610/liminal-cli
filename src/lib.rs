@@ -3,7 +3,7 @@ pub mod http;
 
 use anyhow::Result;
 use cli::{Cli, Command};
-use http::{DEFAULT_URL, Health};
+use http::{CommandsBody, DEFAULT_URL, HealthBody};
 
 pub fn run(cli: Cli) -> Result<()> {
     let url: String;
@@ -15,14 +15,18 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Health => {
             // ヘルスチェック
-            let health: Health = http::get(url + "/api/v1/health")
+            let health: HealthBody = http::get(url + "/api/v1/health")
                 .call()?
                 .body_mut()
-                .read_json::<Health>()?;
+                .read_json::<HealthBody>()?;
             println!("{:?}", health);
         }
         Command::Commands => {
-            println!("コマンド一覧");
+            let commands: CommandsBody = http::get(url + "/api/v1/commands")
+                .call()?
+                .body_mut()
+                .read_json::<CommandsBody>()?;
+            println!("{:?}", commands);
         }
         Command::Exec(args) => match args.params {
             Some(p) => {

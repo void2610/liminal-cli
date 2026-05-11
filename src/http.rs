@@ -6,13 +6,19 @@ pub(crate) const DEFAULT_URL: &str = "http://127.0.0.1:7610";
 
 #[allow(unused)]
 #[derive(Debug, Deserialize)]
-pub(crate) struct Health {
+pub(crate) struct HealthBody {
     status: String,
     version: String,
     // mode: String,
     // project_name: String,
     // project_path: String,
     // command_count: u32,
+}
+
+#[allow(unused)]
+#[derive(Debug, Deserialize)]
+pub(crate) struct CommandsBody {
+    names: Vec<String>,
 }
 
 pub(crate) fn get(url: String) -> RequestBuilder<WithoutBody> {
