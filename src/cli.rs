@@ -24,7 +24,7 @@ pub(crate) enum Command {
     /// コマンド一覧を取得する
     Commands,
     /// コマンドを実行する
-    Exec(ExecArgs),
+    Execute(ExecArgs),
     // Logs,
     // State,
     // Scenarios,
@@ -38,7 +38,7 @@ pub(crate) struct ExecArgs {
     /// 実行対象コマンドのパス
     pub path: String,
     /// コマンドに渡すパラメータ
-    pub params: Option<String>,
+    pub args: Option<String>,
 }
 
 // 単体テスト

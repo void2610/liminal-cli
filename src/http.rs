@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
-use ureq::{Agent, RequestBuilder, typestate::WithoutBody};
+use ureq::{Agent, Error, RequestBuilder, http::Response, typestate::WithoutBody};
 
 pub(crate) const DEFAULT_URL: &str = "http://127.0.0.1:7610";
 
@@ -35,6 +35,22 @@ impl Client {
             .header("Authorization", self.auth_header())
     }
 
+    pub(crate) fn post_execute(
+        &self,
+        endpoint: &str,
+        body: &ExecuteBody,
+    ) -> Result<ExecuteResponse, Error> {
+        let res: ExecuteResponse = self
+            .agent
+            .post(self.base_url.clone() + endpoint)
+            .header("Authorization", self.auth_header())
+            .send_json(&body)?
+            .body_mut()
+            .read_json()?;
+
+        return Ok(res);
+    }
+
     fn auth_header(&self) -> String {
         format!("Bearer {}", self.token)
     }
@@ -49,6 +65,46 @@ pub(crate) struct HealthBody {
     // project_name: String,
     // project_path: String,
     // command_count: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ExecuteBody {
+    pub path: String,
+    pub args: Vec<ExecuteArgs>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct ExecuteArgs {
+    name: String,
+    value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExecuteResponse {
+    pub success: bool,
+    #[serde(default)]
+    pub value: Option<Value>,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub exception_type: Option<String>,
+    #[serde(default)]
+    pub stack_trace: Option<String>,
+    pub duration_ms: u64,
+    #[serde(default)]
+    pub logs: Vec<LogEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogEntry {
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub message: String,
+    #[serde(default)]
+    pub stack_trace: Option<String>,
+    pub timestamp: String,
 }
 
 #[allow(unused)]

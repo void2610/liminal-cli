@@ -4,6 +4,9 @@ pub mod http;
 use anyhow::Result;
 use cli::{Cli, Command};
 use http::{Client, CommandsBody, DEFAULT_URL, HealthBody};
+use ureq::Error;
+
+use crate::http::{ExecuteBody, ExecuteResponse};
 
 pub fn run(cli: Cli) -> Result<()> {
     let url: String;
@@ -38,14 +41,14 @@ pub fn run(cli: Cli) -> Result<()> {
                 .read_json::<CommandsBody>()?;
             println!("{:?}", commands);
         }
-        Command::Exec(args) => match args.params {
-            Some(p) => {
-                println!("{} にパラメータ{}を渡して実行しました", args.path, p);
-            }
-            None => {
-                println!("{} を実行しました", args.path);
-            }
-        },
+        Command::Execute(args) => {
+            //TODO: 文字列->パラメータ列へのデシリアライズが必要
+            let body: ExecuteBody = ExecuteBody {
+                path: args.path,
+                args: args.args,
+            };
+            let res: Result<ExecuteResponse, Error> = client.post_execute("/api/v1/execute", body);
+        }
     }
 
     Ok(())
