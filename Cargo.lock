@@ -413,6 +413,7 @@ dependencies = [
  "anyhow",
  "clap",
  "serde",
+ "serde_json",
  "ureq",
 ]
 

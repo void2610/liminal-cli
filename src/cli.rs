@@ -7,6 +7,8 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub base_url: Option<String>,
     #[arg(long, global = true)]
+    pub token: Option<String>,
+    #[arg(long, global = true)]
     pub json: bool,
 
     // サブコマンド
@@ -52,11 +54,14 @@ mod tests {
             "health",
             "--base-url",
             "http://127.0.0.1:7610",
+            "--token",
+            "testtesttoken",
             "--json",
         ])
         .unwrap();
 
         assert_eq!(cli.base_url.unwrap(), "http://127.0.0.1:7610");
+        assert_eq!(cli.token.unwrap(), "testtesttoken");
         assert!(cli.json);
     }
 }
