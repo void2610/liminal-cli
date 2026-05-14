@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod http;
+pub mod log;
 pub mod token;
 
 use std::collections::HashMap;
@@ -7,6 +8,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use cli::{Cli, Command};
 use http::{Client, CommandsBody, DEFAULT_URL, HealthBody};
+use log::Logger;
 use token::get_token;
 use ureq::Error;
 
@@ -21,6 +23,9 @@ pub fn run(cli: Cli) -> Result<()> {
 
     let token: String = get_token(cli.token).unwrap();
     let client: Client = Client::new(url).with_token(token);
+
+    Logger::print_ok("ok");
+    Logger::dim("dimA");
 
     match cli.command {
         Command::Health => {
