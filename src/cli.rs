@@ -30,7 +30,7 @@ pub(crate) enum Command {
     /// LiminalObservableField のスナップショットを取得する
     State(StateArgs),
     /// シナリオ一覧を取得する
-    Scenarios,
+    Scenarios(ScenariosArgs),
     // Run,
 }
 
@@ -54,6 +54,13 @@ pub struct LogsArgs {
 pub struct StateArgs {
     /// 取得するフィールドのパス。省略時は全件取得
     pub path: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ScenariosArgs {
+    /// 指定したパス prefix に一致するシナリオだけを表示する (case-sensitive)
+    #[arg(long, value_name = "PREFIX")]
+    pub filter: Option<String>,
 }
 
 #[derive(Args)]

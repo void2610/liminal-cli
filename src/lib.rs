@@ -80,9 +80,13 @@ pub fn run(cli: Cli) -> Result<()> {
                 }
             }
         }
-        Command::Scenarios => {
-            let res: ScenariosResponse =
+        Command::Scenarios(args) => {
+            let mut res: ScenariosResponse =
                 client.get_response::<ScenariosResponse>("/api/v1/scenarios")?;
+            // --filter 指定時は path prefix が一致するもののみ残す (commands と同じ規約)
+            if let Some(filter) = args.filter {
+                res.scenarios.retain(|s| s.path.starts_with(&filter));
+            }
             render_scenarios(&res, cli.json)?;
         }
     }
