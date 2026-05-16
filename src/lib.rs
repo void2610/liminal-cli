@@ -11,9 +11,11 @@ use cli::{Cli, Command};
 use http::{Client, CommandsResponse, DEFAULT_URL, HealthResponse};
 use render::{render_commands, render_health};
 use token::get_token;
-use ureq::Error;
 
-use crate::http::{ExecRequest, ExecResponse};
+use crate::{
+    http::{ExecRequest, ExecResponse},
+    render::render_exec,
+};
 
 pub fn run(cli: Cli) -> Result<()> {
     let url: String;
@@ -48,8 +50,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 path: args.path,
                 args: args_map,
             };
-            let res: Result<ExecResponse, Error> = client.post_exec("/api/v1/execute", &body);
-            println!("{:?}", res);
+            let res: ExecResponse = client.post_exec("/api/v1/execute", &body).unwrap();
+            render_exec(&res, cli.json)?;
         }
     }
 

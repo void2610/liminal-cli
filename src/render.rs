@@ -1,5 +1,5 @@
-use crate::http::{CommandsResponse, HealthResponse};
-use crate::style::{CYAN, DIM, GREEN};
+use crate::http::{CommandsResponse, ExecResponse, HealthResponse};
+use crate::style::{BOLD, CYAN, DIM, GREEN, RED};
 use anstream::println;
 use anyhow::Result;
 
@@ -67,6 +67,51 @@ pub(crate) fn render_commands(body: &CommandsResponse, json: bool) -> Result<()>
     }
 
     println!("\n  {DIM}total: {}{DIM:#}", body.commands.len());
+    Ok(())
+}
+
+pub(crate) fn render_exec(body: &ExecResponse, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(body)?);
+        if body.success {
+            return Ok(());
+        } else {
+            anyhow::bail!("execution failed");
+        }
+    }
+
+    // まず実行結果を返す
+    if body.success {
+        println!(
+            "{BOLD}{GREEN}success ({} ms){BOLD:#}{GREEN:#}",
+            body.duration_ms
+        )
+    } else {
+        println!("{BOLD}{RED}failed{BOLD:#}{RED:#}");
+    }
+
+    // 詳細
+    if let Some(v) = &body.value {
+        println!("  value : {}", v);
+    }
+    if let Some(e) = &body.error {
+        println!("  {BOLD}{RED}error : {}{BOLD:#}{RED:#}", e);
+    }
+    if let Some(et) = &body.exception_type {
+        println!("  {RED}type : {}{RED:#}", et);
+    }
+    if let Some(t) = &body.stack_trace {
+        println!();
+        println!("{DIM}{}{DIM}", t);
+    }
+
+    // ログ
+    println!("\n{DIM}");
+    println!("  logs ({})", body.logs.len());
+    for l in body.logs.clone() {
+        println!("    {}: {}", l.r#type, l.message);
+    }
+
     Ok(())
 }
 
