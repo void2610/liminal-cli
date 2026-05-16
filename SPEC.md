@@ -78,7 +78,7 @@ LiminalPalette Unity パッケージが立てる HTTP IPC サーバ (`/api/v1/*`
 | `exec PATH [KEY=VAL]...` | 必要 | 必要 | コマンド実行 |
 | `logs [--limit N]` | 必要 | 必要 | 実行履歴 |
 | `state [PATH]` | 必要 | 必要 | LiminalObservableField スナップショット |
-| `scenarios` | 必要 | 必要 | シナリオ一覧 |
+| `scenarios [--filter PREFIX]` | 必要 | 必要 | シナリオ一覧 |
 | `run [PATH] [--steps FILE_OR_DASH] [--report PATH]` | 必要 | 必要 | シナリオ実行 (named / glob / ad-hoc) |
 
 ### 4.1 `health`
@@ -221,8 +221,10 @@ ok  http://127.0.0.1:7610
 ### 4.9 `scenarios`
 
 - `GET /api/v1/scenarios` 取得。
-- `--json` で丸出し。
+- `--filter PREFIX` 指定時は `path.starts_with(PREFIX)` で絞り込み (`commands` と同じ規約、case-sensitive)。
+- `--json` で丸出し (`--filter` 適用後)。
 - テキスト: 各 scenario を `  {cyan path}  {description} [N steps]` (`stepCount = -1` のときは `?`)。末尾に `total: N`。
+- フィルタ後 0 件なら dim `(no scenarios)`。
 
 ### 4.10 `run`
 
