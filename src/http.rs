@@ -57,14 +57,15 @@ impl Client {
 }
 
 #[allow(unused)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct HealthBody {
-    status: String,
-    version: String,
-    // mode: String,
-    // project_name: String,
-    // project_path: String,
-    // command_count: u32,
+    pub status: String,
+    pub version: String,
+    pub mode: String,
+    pub project_name: String,
+    pub project_path: String,
+    pub command_count: u32,
 }
 
 #[derive(Debug, Serialize)]

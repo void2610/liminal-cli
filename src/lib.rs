@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod http;
-pub mod log;
+pub mod render;
+pub mod style;
 pub mod token;
 
 use std::collections::HashMap;
@@ -8,7 +9,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use cli::{Cli, Command};
 use http::{Client, CommandsBody, DEFAULT_URL, HealthBody};
-use log::Logger;
+use render::render_health;
 use token::get_token;
 use ureq::Error;
 
@@ -22,20 +23,17 @@ pub fn run(cli: Cli) -> Result<()> {
     }
 
     let token: String = get_token(cli.token).unwrap();
-    let client: Client = Client::new(url).with_token(token);
-
-    Logger::print_ok("ok");
-    Logger::dim("dimA");
+    let client: Client = Client::new(url.clone()).with_token(token);
 
     match cli.command {
         Command::Health => {
             // ヘルスチェック
-            let health: HealthBody = client
+            let h: HealthBody = client
                 .get("/api/v1/health")
                 .call()?
                 .body_mut()
                 .read_json::<HealthBody>()?;
-            println!("{:?}", health);
+            render_health(&h, &url, cli.json)?;
         }
         Command::Commands => {
             // コマンド一覧
