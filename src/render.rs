@@ -1,3 +1,4 @@
+use crate::error::ExecFailure;
 use crate::http::{CommandsResponse, ExecResponse, HealthResponse};
 use crate::style::{BOLD, CYAN, DIM, GREEN, RED, YELLOW};
 use anstream::println;
@@ -73,11 +74,10 @@ pub(crate) fn render_commands(body: &CommandsResponse, json: bool) -> Result<()>
 pub(crate) fn render_exec(body: &ExecResponse, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(body)?);
-        if body.success {
-            return Ok(());
-        } else {
-            anyhow::bail!("execution failed");
+        if !body.success {
+            return Err(ExecFailure.into());
         }
+        return Ok(());
     }
 
     // ヘッダ行: success / failed と所要時間
@@ -122,6 +122,9 @@ pub(crate) fn render_exec(body: &ExecResponse, json: bool) -> Result<()> {
         }
     }
 
+    if !body.success {
+        return Err(ExecFailure.into());
+    }
     Ok(())
 }
 

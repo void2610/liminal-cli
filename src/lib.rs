@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod error;
 pub mod http;
 pub mod render;
 pub mod style;
