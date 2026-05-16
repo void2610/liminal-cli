@@ -29,10 +29,16 @@ impl Client {
         return self;
     }
 
-    pub(crate) fn get(&self, endpoint: &str) -> RequestBuilder<WithoutBody> {
-        self.agent
-            .get(self.base_url.clone() + endpoint)
-            .header("Authorization", self.auth_header())
+    pub(crate) fn get_response<T: serde::de::DeserializeOwned>(
+        self,
+        endpoint: &str,
+    ) -> Result<T, Error> {
+        let res = self.get(endpoint).call()?.body_mut().read_json::<T>();
+
+        match res {
+            Ok(r) => return Ok(r),
+            Err(e) => return Err(e),
+        }
     }
 
     pub(crate) fn post_execute(
@@ -49,6 +55,12 @@ impl Client {
             .read_json()?;
 
         return Ok(res);
+    }
+
+    fn get(&self, endpoint: &str) -> RequestBuilder<WithoutBody> {
+        self.agent
+            .get(self.base_url.clone() + endpoint)
+            .header("Authorization", self.auth_header())
     }
 
     fn auth_header(&self) -> String {
@@ -103,9 +115,9 @@ pub struct LogEntry {
 }
 
 #[allow(unused)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct CommandsBody {
-    commands: Vec<Command>,
+    pub commands: Vec<Command>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

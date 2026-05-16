@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use cli::{Cli, Command};
 use http::{Client, CommandsBody, DEFAULT_URL, HealthBody};
-use render::render_health;
+use render::{render_commands, render_health};
 use token::get_token;
 use ureq::Error;
 
@@ -28,21 +28,13 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Health => {
             // ヘルスチェック
-            let h: HealthBody = client
-                .get("/api/v1/health")
-                .call()?
-                .body_mut()
-                .read_json::<HealthBody>()?;
+            let h: HealthBody = client.get_response::<HealthBody>("/api/v1/health")?;
             render_health(&h, &url, cli.json)?;
         }
         Command::Commands => {
             // コマンド一覧
-            let commands: CommandsBody = client
-                .get("/api/v1/commands")
-                .call()?
-                .body_mut()
-                .read_json::<CommandsBody>()?;
-            println!("{:?}", commands);
+            let commands: CommandsBody = client.get_response::<CommandsBody>("/api/v1/commands")?;
+            render_commands(&commands, cli.json)?;
         }
         Command::Execute(args) => {
             //TODO: 文字列->パラメータ列へのデシリアライズが必要
