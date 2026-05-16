@@ -24,29 +24,31 @@ pub(crate) fn render_commands(body: &CommandsBody, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    for c in body.commands.clone() {
-        // パラメータを構築
-        let mut params: String = "".to_owned();
-        for (i, p) in c.parameters.iter().enumerate() {
-            params.push_str(&format!("{}:{}", p.name, p.r#type));
-            if i != c.parameters.len() - 1 {
-                params.push_str(", ");
-            }
-        }
+    for c in &body.commands {
+        // パラメータ列を "(name:Type, ...)" 形式で構築 (空なら空文字)
+        let params: String = if c.parameters.is_empty() {
+            String::new()
+        } else {
+            let inner = c
+                .parameters
+                .iter()
+                .map(|p| format!("{}:{}", p.name, p.r#type))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(" ({})", inner)
+        };
 
-        if params != "" {
-            params = format!("({})", params);
-        }
+        // 説明が未設定の場合は空文字として扱う
+        let description: &str = c.description.as_deref().unwrap_or("");
 
+        // パスは最小幅 60 で左寄せ、その後 2 スペース空けて説明を続ける
         println!(
-            "{GREEN}{}{GREEN:#} {} {DIM}{}{DIM:#}",
-            c.path,
-            c.description.unwrap(),
-            params,
+            "  {GREEN}{:<60}{GREEN:#}  {}{DIM}{}{DIM:#}",
+            c.path, description, params,
         );
     }
 
-    println!("\n{DIM}total: {}{DIM:#}", body.commands.len());
+    println!("\n  {DIM}total: {}{DIM:#}", body.commands.len());
     Ok(())
 }
 
