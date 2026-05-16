@@ -24,7 +24,7 @@ pub(crate) enum Command {
     /// コマンド一覧を取得する
     Commands(CommandsArgs),
     /// コマンドを実行する
-    Execute(ExecArgs),
+    Exec(ExecArgs),
     // Logs,
     // State,
     // Scenarios,

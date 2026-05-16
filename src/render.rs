@@ -1,9 +1,9 @@
-use crate::http::{CommandsBody, HealthBody};
+use crate::http::{CommandsResponse, HealthResponse};
 use crate::style::{CYAN, DIM, GREEN};
 use anstream::println;
 use anyhow::Result;
 
-pub(crate) fn render_health(body: &HealthBody, url: &str, json: bool) -> Result<()> {
+pub(crate) fn render_health(body: &HealthResponse, url: &str, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(body)?);
         return Ok(());
@@ -18,7 +18,7 @@ pub(crate) fn render_health(body: &HealthBody, url: &str, json: bool) -> Result<
     Ok(())
 }
 
-pub(crate) fn render_commands(body: &CommandsBody, json: bool) -> Result<()> {
+pub(crate) fn render_commands(body: &CommandsResponse, json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(body)?);
         return Ok(());

@@ -41,12 +41,12 @@ impl Client {
         }
     }
 
-    pub(crate) fn post_execute(
+    pub(crate) fn post_exec(
         &self,
         endpoint: &str,
-        body: &ExecuteBody,
-    ) -> Result<ExecuteResponse, Error> {
-        let res: ExecuteResponse = self
+        body: &ExecRequest,
+    ) -> Result<ExecResponse, Error> {
+        let res: ExecResponse = self
             .agent
             .post(self.base_url.clone() + endpoint)
             .header("Authorization", self.auth_header())
@@ -71,7 +71,7 @@ impl Client {
 #[allow(unused)]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct HealthBody {
+pub(crate) struct HealthResponse {
     pub status: String,
     pub version: String,
     pub mode: String,
@@ -81,14 +81,14 @@ pub(crate) struct HealthBody {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct ExecuteBody {
+pub(crate) struct ExecRequest {
     pub path: String,
     pub args: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ExecuteResponse {
+pub(crate) struct ExecResponse {
     pub success: bool,
     #[serde(default)]
     pub value: Option<Value>,
@@ -116,7 +116,7 @@ pub struct LogEntry {
 
 #[allow(unused)]
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct CommandsBody {
+pub(crate) struct CommandsResponse {
     pub commands: Vec<Command>,
 }
 

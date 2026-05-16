@@ -8,12 +8,12 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use cli::{Cli, Command};
-use http::{Client, CommandsBody, DEFAULT_URL, HealthBody};
+use http::{Client, CommandsResponse, DEFAULT_URL, HealthResponse};
 use render::{render_commands, render_health};
 use token::get_token;
 use ureq::Error;
 
-use crate::http::{ExecuteBody, ExecuteResponse};
+use crate::http::{ExecRequest, ExecResponse};
 
 pub fn run(cli: Cli) -> Result<()> {
     let url: String;
@@ -28,28 +28,27 @@ pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Health => {
             // ヘルスチェック
-            let h: HealthBody = client.get_response::<HealthBody>("/api/v1/health")?;
+            let h: HealthResponse = client.get_response::<HealthResponse>("/api/v1/health")?;
             render_health(&h, &url, cli.json)?;
         }
         Command::Commands(args) => {
             // コマンド一覧
-            let mut commands: CommandsBody =
-                client.get_response::<CommandsBody>("/api/v1/commands")?;
+            let mut commands: CommandsResponse =
+                client.get_response::<CommandsResponse>("/api/v1/commands")?;
             // --filter 指定時は path prefix が一致するもののみ残す (case-sensitive、SPEC §4.5)
             if let Some(filter) = args.filter {
                 commands.commands.retain(|c| c.path.starts_with(&filter));
             }
             render_commands(&commands, cli.json)?;
         }
-        Command::Execute(args) => {
-            //TODO: 文字列->パラメータ列へのデシリアライズが必要
+        Command::Exec(args) => {
             // Vec<(String, String)> → HashMap<String, String>
             let args_map: HashMap<String, String> = args.args.into_iter().collect();
-            let body: ExecuteBody = ExecuteBody {
+            let body: ExecRequest = ExecRequest {
                 path: args.path,
                 args: args_map,
             };
-            let res: Result<ExecuteResponse, Error> = client.post_execute("/api/v1/execute", &body);
+            let res: Result<ExecResponse, Error> = client.post_exec("/api/v1/execute", &body);
             println!("{:?}", res);
         }
     }
