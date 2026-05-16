@@ -1,5 +1,5 @@
 use crate::http::{CommandsResponse, ExecResponse, HealthResponse};
-use crate::style::{BOLD, CYAN, DIM, GREEN, RED};
+use crate::style::{BOLD, CYAN, DIM, GREEN, RED, YELLOW};
 use anstream::println;
 use anyhow::Result;
 
@@ -80,14 +80,17 @@ pub(crate) fn render_exec(body: &ExecResponse, json: bool) -> Result<()> {
         }
     }
 
-    // まず実行結果を返す
+    // ヘッダ行: success / failed と所要時間
     if body.success {
         println!(
-            "{BOLD}{GREEN}success ({} ms){BOLD:#}{GREEN:#}",
+            "{BOLD}{GREEN}success{GREEN:#}{BOLD:#}  ({:.2} ms)",
             body.duration_ms
-        )
+        );
     } else {
-        println!("{BOLD}{RED}failed{BOLD:#}{RED:#}");
+        println!(
+            "{BOLD}{RED}failed{RED:#}{BOLD:#}  ({:.2} ms)",
+            body.duration_ms
+        );
     }
 
     // 詳細
@@ -95,21 +98,28 @@ pub(crate) fn render_exec(body: &ExecResponse, json: bool) -> Result<()> {
         println!("  value : {}", v);
     }
     if let Some(e) = &body.error {
-        println!("  {BOLD}{RED}error : {}{BOLD:#}{RED:#}", e);
+        println!("  {RED}error : {}{RED:#}", e);
     }
     if let Some(et) = &body.exception_type {
-        println!("  {RED}type : {}{RED:#}", et);
+        println!("  {RED}type  : {}{RED:#}", et);
     }
     if let Some(t) = &body.stack_trace {
         println!();
-        println!("{DIM}{}{DIM}", t);
+        println!("{DIM}{}{DIM:#}", t);
     }
 
     // ログ
-    println!("\n{DIM}");
-    println!("  logs ({})", body.logs.len());
-    for l in body.logs.clone() {
-        println!("    {}: {}", l.r#type, l.message);
+    if !body.logs.is_empty() {
+        println!();
+        println!("  logs ({}):", body.logs.len());
+        for l in &body.logs {
+            // type に応じて色を変える (Error=red, Warning=yellow, その他=dim)
+            match l.r#type.as_str() {
+                "Error" => println!("    {RED}{}: {}{RED:#}", l.r#type, l.message),
+                "Warning" => println!("    {YELLOW}{}: {}{YELLOW:#}", l.r#type, l.message),
+                _ => println!("    {DIM}{}: {}{DIM:#}", l.r#type, l.message),
+            }
+        }
     }
 
     Ok(())
