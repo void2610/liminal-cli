@@ -28,8 +28,11 @@ pub fn run(cli: Cli) -> Result<()> {
         None => url = DEFAULT_URL.to_string(),
     }
 
-    let token: String = get_token(cli.token).unwrap();
-    let client: Client = Client::new(url.clone()).with_token(token);
+    // token が None なら認証なしの Client (health 等は SPEC §6 で認証不要)
+    let client: Client = match get_token(cli.token) {
+        Some(t) => Client::new(url.clone()).with_token(t),
+        None => Client::new(url.clone()),
+    };
 
     match cli.command {
         Command::Health => {

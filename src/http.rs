@@ -46,25 +46,29 @@ impl Client {
         endpoint: &str,
         body: &ExecRequest,
     ) -> Result<ExecResponse, Error> {
-        let res: ExecResponse = self
-            .agent
-            .post(self.base_url.clone() + endpoint)
-            .header("Authorization", self.auth_header())
-            .send_json(&body)?
-            .body_mut()
-            .read_json()?;
-
+        let mut req = self.agent.post(self.base_url.clone() + endpoint);
+        if let Some(h) = self.auth_header() {
+            req = req.header("Authorization", h);
+        }
+        let res: ExecResponse = req.send_json(&body)?.body_mut().read_json()?;
         return Ok(res);
     }
 
     fn get(&self, endpoint: &str) -> RequestBuilder<WithoutBody> {
-        self.agent
-            .get(self.base_url.clone() + endpoint)
-            .header("Authorization", self.auth_header())
+        let mut req = self.agent.get(self.base_url.clone() + endpoint);
+        if let Some(h) = self.auth_header() {
+            req = req.header("Authorization", h);
+        }
+        req
     }
 
-    fn auth_header(&self) -> String {
-        format!("Bearer {}", self.token)
+    /// token が未設定なら Authorization ヘッダを送らない (SPEC §6: /health は認証不要)
+    fn auth_header(&self) -> Option<String> {
+        if self.token.is_empty() {
+            None
+        } else {
+            Some(format!("Bearer {}", self.token))
+        }
     }
 }
 
