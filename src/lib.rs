@@ -50,7 +50,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 path: args.path,
                 args: args_map,
             };
-            let res: ExecResponse = client.post_exec("/api/v1/execute", &body).unwrap();
+            let res: ExecResponse = client.post_exec("/api/v1/execute", &body)?;
             render_exec(&res, cli.json)?;
         }
     }
