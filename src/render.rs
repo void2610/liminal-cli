@@ -1,5 +1,5 @@
 use crate::http::{CommandsBody, HealthBody};
-use crate::style::{DIM, GREEN};
+use crate::style::{CYAN, DIM, GREEN};
 use anstream::println;
 use anyhow::Result;
 
@@ -24,8 +24,23 @@ pub(crate) fn render_commands(body: &CommandsBody, json: bool) -> Result<()> {
         return Ok(());
     }
 
+    // フィルタ後 0 件のときは dim で告知して終了
+    if body.commands.is_empty() {
+        println!("  {DIM}(no commands){DIM:#}");
+        return Ok(());
+    }
+
+    // パス幅は min(max(path.len()), 60)
+    let path_width: usize = body
+        .commands
+        .iter()
+        .map(|c| c.path.len())
+        .max()
+        .unwrap_or(0)
+        .min(60);
+
     for c in &body.commands {
-        // パラメータ列を "(name:Type, ...)" 形式で構築 (空なら空文字)
+        // パラメータ列を " (name:Type, ...)" 形式で構築 (空なら空文字)
         let params: String = if c.parameters.is_empty() {
             String::new()
         } else {
@@ -41,10 +56,13 @@ pub(crate) fn render_commands(body: &CommandsBody, json: bool) -> Result<()> {
         // 説明が未設定の場合は空文字として扱う
         let description: &str = c.description.as_deref().unwrap_or("");
 
-        // パスは最小幅 60 で左寄せ、その後 2 スペース空けて説明を続ける
+        // パスを左寄せ (cyan)、2 スペース空けて説明、末尾にパラメータ (dim)
         println!(
-            "  {GREEN}{:<60}{GREEN:#}  {}{DIM}{}{DIM:#}",
-            c.path, description, params,
+            "  {CYAN}{:<width$}{CYAN:#}  {}{DIM}{}{DIM:#}",
+            c.path,
+            description,
+            params,
+            width = path_width,
         );
     }
 
