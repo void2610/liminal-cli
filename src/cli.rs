@@ -22,7 +22,7 @@ pub(crate) enum Command {
     Health,
     // Doctor,
     /// コマンド一覧を取得する
-    Commands,
+    Commands(CommandsArgs),
     /// コマンドを実行する
     Execute(ExecArgs),
     // Logs,
@@ -32,6 +32,13 @@ pub(crate) enum Command {
 }
 
 impl Command {}
+
+#[derive(Args)]
+pub struct CommandsArgs {
+    /// 指定したパス prefix に一致するコマンドだけを表示する (case-sensitive)
+    #[arg(long, value_name = "PREFIX")]
+    pub filter: Option<String>,
+}
 
 #[derive(Args)]
 pub struct ExecArgs {

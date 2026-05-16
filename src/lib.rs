@@ -31,9 +31,14 @@ pub fn run(cli: Cli) -> Result<()> {
             let h: HealthBody = client.get_response::<HealthBody>("/api/v1/health")?;
             render_health(&h, &url, cli.json)?;
         }
-        Command::Commands => {
+        Command::Commands(args) => {
             // コマンド一覧
-            let commands: CommandsBody = client.get_response::<CommandsBody>("/api/v1/commands")?;
+            let mut commands: CommandsBody =
+                client.get_response::<CommandsBody>("/api/v1/commands")?;
+            // --filter 指定時は path prefix が一致するもののみ残す (case-sensitive、SPEC §4.5)
+            if let Some(filter) = args.filter {
+                commands.commands.retain(|c| c.path.starts_with(&filter));
+            }
             render_commands(&commands, cli.json)?;
         }
         Command::Execute(args) => {
