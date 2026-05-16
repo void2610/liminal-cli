@@ -151,3 +151,80 @@ pub struct Parameter {
     #[serde(default)]
     pub choices: Option<Vec<Value>>,
 }
+
+#[allow(unused)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LogsResponse {
+    pub invocations: Vec<Invocation>,
+    pub total: u32,
+    pub limit: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Invocation {
+    pub path: String,
+    pub timestamp: String,
+    #[serde(default)]
+    pub args: HashMap<String, Value>,
+    pub result: ExecResponse,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StateValue {
+    pub path: String,
+    #[serde(default)]
+    pub value: Option<Value>,
+    #[serde(rename = "type")]
+    pub r#type: String,
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StateList {
+    pub fields: Vec<StateField>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StateField {
+    pub path: String,
+    #[serde(default)]
+    pub value: Option<Value>,
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub instance_resolved: bool,
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ScenariosResponse {
+    pub scenarios: Vec<Scenario>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Scenario {
+    pub path: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub step_count: i32,
+}
+
+/// クエリ文字列の値を percent-encode する (RFC 3986 unreserved 以外をエスケープ)
+pub(crate) fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
+}

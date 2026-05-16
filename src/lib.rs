@@ -14,8 +14,11 @@ use render::{render_commands, render_health};
 use token::get_token;
 
 use crate::{
-    http::{ExecRequest, ExecResponse},
-    render::render_exec,
+    http::{
+        ExecRequest, ExecResponse, LogsResponse, ScenariosResponse, StateList, StateValue,
+        percent_encode,
+    },
+    render::{render_exec, render_logs, render_scenarios, render_state_list, render_state_value},
 };
 
 pub fn run(cli: Cli) -> Result<()> {
@@ -53,6 +56,34 @@ pub fn run(cli: Cli) -> Result<()> {
             };
             let res: ExecResponse = client.post_exec("/api/v1/execute", &body)?;
             render_exec(&res, cli.json)?;
+        }
+        Command::Logs(args) => {
+            // SPEC §4.7: --limit 未指定なら ?limit クエリは付けない
+            let endpoint: String = match args.limit {
+                Some(n) => format!("/api/v1/logs?limit={}", n),
+                None => "/api/v1/logs".to_string(),
+            };
+            let res: LogsResponse = client.get_response::<LogsResponse>(&endpoint)?;
+            render_logs(&res, cli.json)?;
+        }
+        Command::State(args) => {
+            // SPEC §4.8: PATH 指定時は単一フィールド、未指定なら全件
+            match args.path {
+                Some(path) => {
+                    let endpoint = format!("/api/v1/state?path={}", percent_encode(&path));
+                    let res: StateValue = client.get_response::<StateValue>(&endpoint)?;
+                    render_state_value(&res, cli.json)?;
+                }
+                None => {
+                    let res: StateList = client.get_response::<StateList>("/api/v1/state")?;
+                    render_state_list(&res, cli.json)?;
+                }
+            }
+        }
+        Command::Scenarios => {
+            let res: ScenariosResponse =
+                client.get_response::<ScenariosResponse>("/api/v1/scenarios")?;
+            render_scenarios(&res, cli.json)?;
         }
     }
 

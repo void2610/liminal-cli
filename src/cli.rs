@@ -25,9 +25,12 @@ pub(crate) enum Command {
     Commands(CommandsArgs),
     /// コマンドを実行する
     Exec(ExecArgs),
-    // Logs,
-    // State,
-    // Scenarios,
+    /// 実行履歴を取得する
+    Logs(LogsArgs),
+    /// LiminalObservableField のスナップショットを取得する
+    State(StateArgs),
+    /// シナリオ一覧を取得する
+    Scenarios,
     // Run,
 }
 
@@ -38,6 +41,19 @@ pub struct CommandsArgs {
     /// 指定したパス prefix に一致するコマンドだけを表示する (case-sensitive)
     #[arg(long, value_name = "PREFIX")]
     pub filter: Option<String>,
+}
+
+#[derive(Args)]
+pub struct LogsArgs {
+    /// 取得件数の上限 (SPEC §4.7 既定 20、サーバ側上限 200)
+    #[arg(long, value_name = "N")]
+    pub limit: Option<u32>,
+}
+
+#[derive(Args)]
+pub struct StateArgs {
+    /// 取得するフィールドのパス。省略時は全件取得
+    pub path: Option<String>,
 }
 
 #[derive(Args)]
