@@ -232,3 +232,47 @@ pub(crate) fn percent_encode(s: &str) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percent_encode_英数字はそのまま() {
+        assert_eq!(percent_encode("abc123"), "abc123");
+    }
+
+    #[test]
+    fn percent_encode_unreserved_文字はそのまま() {
+        // RFC 3986: ALPHA / DIGIT / "-" / "." / "_" / "~"
+        assert_eq!(percent_encode("a-b_c.d~e"), "a-b_c.d~e");
+    }
+
+    #[test]
+    fn percent_encode_スラッシュはエスケープ() {
+        // クエリ値内では / もエスケープすべき (RFC 3986 reserved)
+        assert_eq!(percent_encode("Player/Health"), "Player%2FHealth");
+    }
+
+    #[test]
+    fn percent_encode_スペースはエスケープ() {
+        assert_eq!(percent_encode("a b"), "a%20b");
+    }
+
+    #[test]
+    fn percent_encode_等号とアンパサンドはエスケープ() {
+        // ?key=value& の構造を壊さないため
+        assert_eq!(percent_encode("a=b&c"), "a%3Db%26c");
+    }
+
+    #[test]
+    fn percent_encode_マルチバイト_utf8() {
+        // "あ" は UTF-8 で 0xE3 0x81 0x82
+        assert_eq!(percent_encode("あ"), "%E3%81%82");
+    }
+
+    #[test]
+    fn percent_encode_空文字() {
+        assert_eq!(percent_encode(""), "");
+    }
+}

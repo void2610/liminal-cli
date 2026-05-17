@@ -108,4 +108,112 @@ mod tests {
         assert_eq!(cli.token.unwrap(), "testtesttoken");
         assert!(cli.json);
     }
+
+    #[test]
+    fn cli_commands_filter_をパースできる() {
+        let cli = Cli::try_parse_from(["liminal", "commands", "--filter", "Player/"]).unwrap();
+        match cli.command {
+            Command::Commands(args) => assert_eq!(args.filter.as_deref(), Some("Player/")),
+            _ => panic!("expected Commands"),
+        }
+    }
+
+    #[test]
+    fn cli_commands_filter_省略可() {
+        let cli = Cli::try_parse_from(["liminal", "commands"]).unwrap();
+        match cli.command {
+            Command::Commands(args) => assert_eq!(args.filter, None),
+            _ => panic!("expected Commands"),
+        }
+    }
+
+    #[test]
+    fn cli_state_path_をパースできる() {
+        let cli = Cli::try_parse_from(["liminal", "state", "Player/Health"]).unwrap();
+        match cli.command {
+            Command::State(args) => assert_eq!(args.path.as_deref(), Some("Player/Health")),
+            _ => panic!("expected State"),
+        }
+    }
+
+    #[test]
+    fn cli_state_path_省略可() {
+        let cli = Cli::try_parse_from(["liminal", "state"]).unwrap();
+        match cli.command {
+            Command::State(args) => assert_eq!(args.path, None),
+            _ => panic!("expected State"),
+        }
+    }
+
+    #[test]
+    fn cli_logs_limit_をパースできる() {
+        let cli = Cli::try_parse_from(["liminal", "logs", "--limit", "10"]).unwrap();
+        match cli.command {
+            Command::Logs(args) => assert_eq!(args.limit, Some(10)),
+            _ => panic!("expected Logs"),
+        }
+    }
+
+    #[test]
+    fn cli_logs_limit_省略可() {
+        let cli = Cli::try_parse_from(["liminal", "logs"]).unwrap();
+        match cli.command {
+            Command::Logs(args) => assert_eq!(args.limit, None),
+            _ => panic!("expected Logs"),
+        }
+    }
+
+    #[test]
+    fn cli_scenarios_filter_をパースできる() {
+        let cli = Cli::try_parse_from(["liminal", "scenarios", "--filter", "Combat/"]).unwrap();
+        match cli.command {
+            Command::Scenarios(args) => assert_eq!(args.filter.as_deref(), Some("Combat/")),
+            _ => panic!("expected Scenarios"),
+        }
+    }
+
+    #[test]
+    fn cli_exec_key_value_を複数パースできる() {
+        let cli = Cli::try_parse_from(["liminal", "exec", "Foo/Bar", "x=1", "y=2"]).unwrap();
+        match cli.command {
+            Command::Exec(args) => {
+                assert_eq!(args.path, "Foo/Bar");
+                assert_eq!(
+                    args.args,
+                    vec![
+                        ("x".to_string(), "1".to_string()),
+                        ("y".to_string(), "2".to_string()),
+                    ]
+                );
+            }
+            _ => panic!("expected Exec"),
+        }
+    }
+
+    #[test]
+    fn cli_exec_value_側に_等号_が含まれてもよい() {
+        // split_once('=') なので最初の = だけで分割される
+        let cli = Cli::try_parse_from(["liminal", "exec", "Foo", "expr=a=b"]).unwrap();
+        match cli.command {
+            Command::Exec(args) => {
+                assert_eq!(
+                    args.args,
+                    vec![("expr".to_string(), "a=b".to_string())]
+                );
+            }
+            _ => panic!("expected Exec"),
+        }
+    }
+
+    #[test]
+    fn cli_exec_key_等号無しはエラー() {
+        let r = Cli::try_parse_from(["liminal", "exec", "Foo", "novalue"]);
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn cli_サブコマンド未指定はエラー() {
+        let r = Cli::try_parse_from(["liminal"]);
+        assert!(r.is_err());
+    }
 }
