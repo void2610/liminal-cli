@@ -40,9 +40,10 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Health => {
             // ヘルスチェック
             let h: HealthResponse = client.get_response::<HealthResponse>("/api/v1/health")?;
-            // プロジェクト探索
-            let cwd = std::env::current_dir();
-            let dir = detect_project(cwd.unwrap().as_path());
+            // プロジェクト探索 (cwd 取得失敗は致命にせず未検出扱い)
+            let dir = std::env::current_dir()
+                .ok()
+                .and_then(|cwd| detect_project(&cwd));
 
             render_health(&h, &url, cli.json)?;
         }
