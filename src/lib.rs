@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod discovery;
 pub mod error;
 pub mod http;
 pub mod render;
@@ -9,6 +10,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use cli::{Cli, Command};
+use discovery::detect_project;
 use http::{Client, CommandsResponse, DEFAULT_URL, HealthResponse};
 use render::{render_commands, render_health};
 use token::get_token;
@@ -38,6 +40,10 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Health => {
             // ヘルスチェック
             let h: HealthResponse = client.get_response::<HealthResponse>("/api/v1/health")?;
+            // プロジェクト探索
+            let cwd = std::env::current_dir();
+            let dir = detect_project(cwd.unwrap().as_path());
+
             render_health(&h, &url, cli.json)?;
         }
         Command::Commands(args) => {
