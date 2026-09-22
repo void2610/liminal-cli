@@ -239,3 +239,70 @@ fn exit_code_set_port_範囲外は1() {
         .assert()
         .code(1);
 }
+
+// ---- 色の抑制 (SPEC §10) ----
+
+/// 色を抑制していない素の Command (cmd() は NO_COLOR=1 を立ててしまうため)
+fn raw_cmd() -> assert_cmd::Command {
+    let mut c = assert_cmd::Command::cargo_bin("liminal").unwrap();
+    c.env_clear()
+        .env("PATH", std::env::var("PATH").unwrap_or_default());
+    c
+}
+
+#[test]
+fn NO_COLOR_ならカラーコードが出ない() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/health");
+        then.status(200).body(health_body("editor", "P", "/p"));
+    });
+
+    raw_cmd()
+        .env("NO_COLOR", "1")
+        .args(["--base-url", &server.base_url(), "health"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\u{1b}[").not());
+}
+
+#[test]
+fn 非TTYならカラーコードが出ない() {
+    // assert_cmd は stdout をパイプで受けるので TTY ではない。
+    // NO_COLOR を立てなくても色が出ないこと。
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/health");
+        then.status(200).body(health_body("editor", "P", "/p"));
+    });
+
+    raw_cmd()
+        .args(["--base-url", &server.base_url(), "health"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\u{1b}[").not());
+}
+
+#[test]
+fn json_出力にカラーコードが混ざらない() {
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/health");
+        then.status(200).body(health_body("editor", "P", "/p"));
+    });
+
+    raw_cmd()
+        .args(["--base-url", &server.base_url(), "--json", "health"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\u{1b}[").not());
+}
+
+#[test]
+fn エラー出力も非TTYなら色無し() {
+    raw_cmd()
+        .args(["--port", &free_port().to_string(), "health"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("\u{1b}[").not());
+}

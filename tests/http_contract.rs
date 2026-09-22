@@ -187,3 +187,43 @@ fn json_の_exec_は失敗でも丸出しして_exit2() {
         .code(2)
         .stdout(predicate::str::contains("\"hint\": \"x\""));
 }
+
+#[test]
+fn run_の_409_と_429_も_exit1_で理由を出す() {
+    for (status, msg) in [
+        (409u16, "別のシナリオが実行中です"),
+        (429, "Rate limit exceeded"),
+    ] {
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(POST).path("/api/v1/scenarios/run");
+            then.status(status).body(format!(r#"{{"error":"{msg}"}}"#));
+        });
+
+        cmd()
+            .args(["--base-url", &server.base_url(), "run", "Foo/Bar"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains(format!("HTTP {status}")))
+            .stderr(predicate::str::contains(msg));
+    }
+}
+
+#[test]
+fn probe_は応答が遅いポートを生存扱いしない() {
+    // discovery の probe は 0.4s で諦める (SPEC §2)。
+    // 立っているが返さないポートに引きずられないことの回帰テスト。
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/health");
+        then.status(200)
+            .delay(std::time::Duration::from_millis(1500))
+            .body(r#"{"status":"ok"}"#);
+    });
+
+    cmd()
+        .args(["--port", &server.port().to_string(), "health"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("見つかりません"));
+}

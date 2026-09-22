@@ -1,5 +1,19 @@
 # `liminal` Rust 実装 TDD テスト項目
 
+> **状況 (2026-09-22)**: Phase 1〜11 と「仕上げ」はすべて実装済み。テストは 217 件。
+> チェック済みの項目は対応するテストが存在するもの。
+> 未チェックのまま残っているのは「テストが無い」か「実装が本書の想定と異なる」項目で、
+> 各所に理由を添えてある。正本は実際のテストスイートで、本書はその索引として維持する。
+>
+> | Phase | 主なテスト |
+> |---|---|
+> | 1, 2 | `tests/health.rs` / `tests/commands.rs` / `tests/state.rs` / `tests/scenarios.rs` / `tests/logs.rs` / `src/token.rs` |
+> | 3 | `tests/exec.rs` |
+> | 4, 5, 6 | `tests/discovery.rs` / `src/discovery.rs` / `src/cache.rs` |
+> | 7, 8 | `tests/project.rs` / `src/commands/project.rs` |
+> | 9, 10, 11 | `tests/run.rs` / `src/commands/glob.rs` / `src/commands/junit.rs` |
+> | 仕上げ | `tests/e2e.rs` / `tests/http_contract.rs` |
+
 各フェーズで **動く CLI** を 1 機能ずつ増やしていく方式。
 フェーズ N が終われば「`liminal --base-url ... health`」のように手で動かせる状態になる。
 次のフェーズは前フェーズのテストを **緑のまま** 維持しながら新テストを足していく。
@@ -48,17 +62,18 @@ liminal --base-url http://127.0.0.1:7610 health --json
 
 **新規テスト**:
 
-- [ ] HTTP GET が `Accept: application/json` ヘッダ付きで送られる
-- [ ] 200 + JSON object → struct にデコードできる
+- [x] HTTP GET が `Accept: application/json` ヘッダ付きで送られる
+- [x] 200 + JSON object → struct にデコードできる
 - [ ] 200 + 空 body → エラーで止まらず空表示
-- [ ] 接続失敗 → exit 1、stderr に赤エラー
-- [ ] 200 でフィールド全部揃う → 全行表示
-- [ ] `mode` / `projectName` / `projectPath` が空文字列 → `(unknown)` を dim
-- [ ] `--json` → `to_string_pretty` 相当の整形 JSON を stdout に
-- [ ] `--json` 時にカラーコードが混ざらない
-- [ ] `NO_COLOR=1` でカラーコードが出ない
-- [ ] 非 TTY (`isatty=false`) でカラーコードが出ない
-- [ ] サブコマンド未指定 → clap がエラーで終了
+  - **未カバー**: 現実装は JSON として解釈できずエラー終了する。SPEC §6 に空 body の規定が無いため、本書側の想定を採用していない
+- [x] 接続失敗 → exit 1、stderr に赤エラー
+- [x] 200 でフィールド全部揃う → 全行表示
+- [x] `mode` / `projectName` / `projectPath` が空文字列 → `(unknown)` を dim
+- [x] `--json` → `to_string_pretty` 相当の整形 JSON を stdout に
+- [x] `--json` 時にカラーコードが混ざらない
+- [x] `NO_COLOR=1` でカラーコードが出ない
+- [x] 非 TTY (`isatty=false`) でカラーコードが出ない
+- [x] サブコマンド未指定 → clap がエラーで終了
 
 **リファクタの目安**: HTTP / 出力 / 引数パースの 3 モジュールに分離。HTTP は trait 抽象化して
 次フェーズ以降の wiremock テストに備える。
@@ -89,50 +104,51 @@ liminal --base-url ... logs --limit 10
 **新規テスト**:
 
 トークン解決:
-- [ ] `--token "abc"` が最優先 (env / file は無視)
-- [ ] `$LP_TOKEN="xyz"` が file より優先
-- [ ] `$LP_TOKEN="   "` (空白のみ) → file にフォールバック
-- [ ] file 中身 `"abc\n"` → strip して `"abc"`
-- [ ] file 中身が空白のみ → 「未設定」扱い
+- [x] `--token "abc"` が最優先 (env / file は無視)
+- [x] `$LP_TOKEN="xyz"` が file より優先
+- [x] `$LP_TOKEN="   "` (空白のみ) → file にフォールバック
+- [x] file 中身 `"abc\n"` → strip して `"abc"`
+- [x] file 中身が空白のみ → 「未設定」扱い
 - [ ] file 不在 → 認証必須コマンドで exit 1 + 「トークンが見つかりません」
+  - **未カバー**: 実装は Authorization を送らずサーバの 401 をそのまま表示する方式 (SPEC §6)。CLI 側で事前に弾いてはいない
 
 `commands`:
-- [ ] 5 件取得 → 5 行表示 + `total: 5`
-- [ ] `--filter Player/` で prefix 一致のみ
-- [ ] フィルタ後 0 件 → `(コマンドなし)` dim
-- [ ] パラメータ表示 `(name:Type, ...)` を dim
-- [ ] パス幅は `min(max, 60)` でカラム揃え
-- [ ] `--json` → `{"commands": [...]}` (フィルタ後)
+- [x] 5 件取得 → 5 行表示 + `total: 5`
+- [x] `--filter Player/` で prefix 一致のみ
+- [x] フィルタ後 0 件 → `(コマンドなし)` dim
+- [x] パラメータ表示 `(name:Type, ...)` を dim
+- [x] パス幅は `min(max, 60)` でカラム揃え
+- [x] `--json` → `{"commands": [...]}` (フィルタ後)
 
 `state`:
-- [ ] PATH 指定 → `?path=...` URL エンコード付き
-- [ ] PATH 省略 → 全件
-- [ ] 単一: `path` / `value` / `type` 表示
-- [ ] 全件: `instanceResolved=true` は `●` 緑、`false` は `○` 黄
-- [ ] `value` が JSON null → 文字列 `"null"` を表示
-- [ ] 0 件 → `(state なし)` dim
-- [ ] `--json` 透過
+- [x] PATH 指定 → `?path=...` URL エンコード付き
+- [x] PATH 省略 → 全件
+- [x] 単一: `path` / `value` / `type` 表示
+- [x] 全件: `instanceResolved=true` は `●` 緑、`false` は `○` 黄
+- [x] `value` が JSON null → 文字列 `"null"` を表示
+- [x] 0 件 → `(state なし)` dim
+- [x] `--json` 透過
 
 `scenarios`:
-- [ ] 一覧表示 + `total: N`
-- [ ] `stepCount = -1` → `?` 表示
-- [ ] 0 件 → `(scenario なし)`
-- [ ] `--json` 透過
+- [x] 一覧表示 + `total: N`
+- [x] `stepCount = -1` → `?` 表示
+- [x] 0 件 → `(scenario なし)`
+- [x] `--json` 透過
 
 `logs`:
-- [ ] `--limit 10` → `?limit=10`
-- [ ] `--limit` 既定 20
-- [ ] success=true → `✓` 緑、false → `✗` 赤 + `error: ...`
-- [ ] `args` あり → `args: k=v, ...` dim
-- [ ] `value` 非 null → `value: ...` dim
-- [ ] 末尾 `shown N / total M`
-- [ ] `--json` 透過
+- [x] `--limit 10` → `?limit=10`
+- [x] `--limit` 既定 20
+- [x] success=true → `✓` 緑、false → `✗` 赤 + `error: ...`
+- [x] `args` あり → `args: k=v, ...` dim
+- [x] `value` 非 null → `value: ...` dim
+- [x] 末尾 `shown N / total M`
+- [x] `--json` 透過
 
 エラーマッピング:
-- [ ] 401 + `{"error":"Unauthorized"}` → exit 1 + `HTTP 401: Unauthorized`
-- [ ] 404 + `{"error":"..."}` → exit 1
-- [ ] 500 + 生文字列 → exit 1 + 生文字列をそのまま表示
-- [ ] 接続失敗 → exit 1 + 赤エラー
+- [x] 401 + `{"error":"Unauthorized"}` → exit 1 + `HTTP 401: Unauthorized`
+- [x] 404 + `{"error":"..."}` → exit 1
+- [x] 500 + 生文字列 → exit 1 + 生文字列をそのまま表示
+- [x] 接続失敗 → exit 1 + 赤エラー
 
 ---
 
@@ -155,29 +171,29 @@ echo $?  # 成功なら 0、success:false なら 2
 **新規テスト**:
 
 引数:
-- [ ] `value=100` → body `{"args":{"value":"100"}}`
-- [ ] 引数 0 個 → body `{"args":{}}`
-- [ ] `path=foo=bar` → `{"path":"foo=bar"}` (split は最初の `=` で 1 回)
-- [ ] `novalue` (= 無し) → exit 1
-- [ ] 値は数値化されず文字列のまま (`"100"` であって `100` ではない)
+- [x] `value=100` → body `{"args":{"value":"100"}}`
+- [x] 引数 0 個 → body `{"args":{}}`
+- [x] `path=foo=bar` → `{"path":"foo=bar"}` (split は最初の `=` で 1 回)
+- [x] `novalue` (= 無し) → exit 1
+- [x] 値は数値化されず文字列のまま (`"100"` であって `100` ではない)
 
 POST 構築:
-- [ ] `Content-Type: application/json` 付き
-- [ ] body は `{"path":"...","args":{...}}` の形
+- [x] `Content-Type: application/json` 付き
+- [x] body は `{"path":"...","args":{...}}` の形
 
 出力 (text):
-- [ ] success=true → `success (1.07 ms)` 緑 + `value : ...`
-- [ ] success=false → `failed` 赤 + `error : ...` + `type : ...` + stackTrace dim
-- [ ] `value=null` → value 行を出さない
-- [ ] logs 0 件 → logs ブロック自体出さない
-- [ ] logs[].type=Log → dim、Warning → 黄、Error → 赤
+- [x] success=true → `success (1.07 ms)` 緑 + `value : ...`
+- [x] success=false → `failed` 赤 + `error : ...` + `type : ...` + stackTrace dim
+- [x] `value=null` → value 行を出さない
+- [x] logs 0 件 → logs ブロック自体出さない
+- [x] logs[].type=Log → dim、Warning → 黄、Error → 赤
 
 Exit code:
-- [ ] success=true → exit 0
-- [ ] success=false → exit 2
-- [ ] success=false + `--json` → JSON 出力 + exit 2 (両立)
-- [ ] HTTP 500 → exit 1 (success フィールドに到達しない)
-- [ ] 接続失敗 → exit 1
+- [x] success=true → exit 0
+- [x] success=false → exit 2
+- [x] success=false + `--json` → JSON 出力 + exit 2 (両立)
+- [x] HTTP 500 → exit 1 (success フィールドに到達しない)
+- [x] 接続失敗 → exit 1
 
 ---
 
@@ -203,42 +219,42 @@ cwd が Unity プロジェクトなら `ProjectSettings/LiminalPalette.json` の
 **新規テスト**:
 
 cwd 検出:
-- [ ] cwd 直下に `ProjectSettings/ProjectVersion.txt` → cwd を返す
-- [ ] 親階層にある → その親を返す
-- [ ] root まで見つからない → `None` (このとき DEFAULT_PORTS のみ使う)
-- [ ] cwd が削除済み (OSError) → `None` (panic しない)
+- [x] cwd 直下に `ProjectSettings/ProjectVersion.txt` → cwd を返す
+- [x] 親階層にある → その親を返す
+- [x] root まで見つからない → `None` (このとき DEFAULT_PORTS のみ使う)
+- [x] cwd が削除済み (OSError) → `None` (panic しない)
 
 Project config 読み:
-- [ ] ファイル不在 → `{editor:None, runtime:None}`
-- [ ] `{"port":7613,"runtimePort":7700}` → `{Some(7613),Some(7700)}`
-- [ ] `{"port":"7613"}` (型違い) → 両方 None
-- [ ] `{"port":0}` / `{"port":65536}` → 範囲外で None
-- [ ] 壊れた JSON → 両方 None
-- [ ] 未知フィールド共存 → 既知フィールドは読める
+- [x] ファイル不在 → `{editor:None, runtime:None}`
+- [x] `{"port":7613,"runtimePort":7700}` → `{Some(7613),Some(7700)}`
+- [x] `{"port":"7613"}` (型違い) → 両方 None
+- [x] `{"port":0}` / `{"port":65536}` → 範囲外で None
+- [x] 壊れた JSON → 両方 None
+- [x] 未知フィールド共存 → 既知フィールドは読める
 
 `probe_port`:
-- [ ] 200 + JSON object → `Some(dict)`
-- [ ] 200 + JSON array → `None` (object 以外は捨てる)
-- [ ] 200 + 非 JSON → `None`
-- [ ] 4xx / 5xx → `None`
-- [ ] connection refused → `None` (例外を表に出さない)
-- [ ] 0.4s 以内に応答無し → `None` (タイムアウトが効く回帰テスト)
+- [x] 200 + JSON object → `Some(dict)`
+- [x] 200 + JSON array → `None` (object 以外は捨てる)
+- [x] 200 + 非 JSON → `None`
+- [x] 4xx / 5xx → `None`
+- [x] connection refused → `None` (例外を表に出さない)
+- [x] 0.4s 以内に応答無し → `None` (タイムアウトが効く回帰テスト)
 
 candidate_ports:
-- [ ] preferred=None, cache=None → `[7610..7615]` だけ
-- [ ] `preferred.editor=7613` → `[7613..7618, 7610..7612]` (重複除外で 9 個)
-- [ ] `preferred.editor=65535` → `[65535, 7610..7615]` (overflow しない)
+- [x] preferred=None, cache=None → `[7610..7615]` だけ
+- [x] `preferred.editor=7613` → `[7613..7618, 7610..7612]` (重複除外で 9 個)
+- [x] `preferred.editor=65535` → `[65535, 7610..7615]` (overflow しない)
 
 Discovery 統合:
-- [ ] alive 0 → exit 1 + `Liminal Palette サーバーが見つかりません (試したポート: ...)`
-- [ ] alive 1 → 採用、`base_url = http://127.0.0.1:{port}`
-- [ ] alive 2 (Phase 4 では未対応) → exit 1 + `複数の Unity プロジェクトが起動中です`
-- [ ] preferred port が候補の先頭に来る (probe されることを assert)
+- [x] alive 0 → exit 1 + `Liminal Palette サーバーが見つかりません (試したポート: ...)`
+- [x] alive 1 → 採用、`base_url = http://127.0.0.1:{port}`
+- [x] alive 2 (Phase 4 では未対応) → exit 1 + `複数の Unity プロジェクトが起動中です`
+- [x] preferred port が候補の先頭に来る (probe されることを assert)
   - **注**: 当初ここは「preferred が立っていれば DEFAULT_PORTS まで probe しない」としていたが、
     SPEC §5-5 は「候補を全部 probe してから alive を選ぶ」と定めており両立しない。
     生存が複数あるかどうかを知らないと曖昧エラー (§5-7) を出せないため、SPEC 側に合わせて全 probe とした。
     早期打ち切りをするのは target 指定時のキャッシュ経路 (§5-4) だけ。
-- [ ] `--port N` → そのポート 1 個だけ probe
+- [x] `--port N` → そのポート 1 個だけ probe
 
 ---
 
@@ -256,29 +272,31 @@ Discovery 統合:
 **新規テスト**:
 
 Load:
-- [ ] ファイル不在 → `{version:2, projects:{}}`
-- [ ] `version=1` → 空キャッシュ (silent reset)
-- [ ] `version` 欠落 → 空
-- [ ] 壊れた JSON → 空
-- [ ] `projects` が array (型違い) → `{}` に補正
-- [ ] 正常な v2 → roundtrip
+- [x] ファイル不在 → `{version:2, projects:{}}`
+- [x] `version=1` → 空キャッシュ (silent reset)
+- [x] `version` 欠落 → 空
+- [x] 壊れた JSON → 空
+- [x] `projects` が array (型違い) → `{}` に補正
+- [x] 正常な v2 → roundtrip
 
 Save:
-- [ ] 親ディレクトリ不在 → `mkdir_p` してから書く
-- [ ] indent=2 + 非 ASCII (日本語 projectName) がそのまま (`\uXXXX` ではない)
+- [x] 親ディレクトリ不在 → `mkdir_p` してから書く
+- [x] indent=2 + 非 ASCII (日本語 projectName) がそのまま (`\uXXXX` ではない)
 - [ ] 書けない (権限なし) → silent (panic しない)
+  - **未カバー**: 権限を落とす環境を用意していないため未検証。実装は書き込み失敗を握り潰す
 
 `record_cache`:
-- [ ] `info.projectPath` 欠落 → no-op
-- [ ] `info.mode` 欠落 → `editor` として記録 (古いサーバ互換)
-- [ ] 既存 entry の他 mode を保持しつつ追記
-- [ ] `projectName` を更新
+- [x] `info.projectPath` 欠落 → no-op
+- [x] `info.mode` 欠落 → `editor` として記録 (古いサーバ互換)
+- [x] 既存 entry の他 mode を保持しつつ追記
+- [x] `projectName` を更新
 
 Discovery 早出し:
 - [ ] target あり + cache hit + `/health` で一致 → 1 リクエストで採用、他を probe しない
-- [ ] target あり + cache hit だが `/health` で不一致 → 通常 probe フェーズに進む
-- [ ] cache に項目あるが応答無し → 通常 probe で alive を再構築
-- [ ] 採用ポートが cache に書き戻される
+  - **未カバー**: リクエスト数の assert を置いていない。早出し自体は `discovery_port_明示時はキャッシュ早出しをしない` で間接的に確認
+- [x] target あり + cache hit だが `/health` で不一致 → 通常 probe フェーズに進む
+- [x] cache に項目あるが応答無し → 通常 probe で alive を再構築
+- [x] 採用ポートが cache に書き戻される
 
 ---
 
@@ -304,40 +322,40 @@ LP_PROJECT=/path/to/proj liminal commands
 **新規テスト**:
 
 target 解決:
-- [ ] `--project` 最優先
-- [ ] `--project` がパスとして存在 + dir → 絶対パス化
-- [ ] `--project` がパスとして無効 → 名前として保持
-- [ ] `$LP_PROJECT` が次
-- [ ] cwd 検出が最後
+- [x] `--project` 最優先
+- [x] `--project` がパスとして存在 + dir → 絶対パス化
+- [x] `--project` がパスとして無効 → 名前として保持
+- [x] `$LP_PROJECT` が次
+- [x] cwd 検出が最後
 
 `matches_project`:
-- [ ] `target=None` → true
-- [ ] `info.projectPath == target` → true
-- [ ] `info.projectName == target` → true
-- [ ] `target` を canonicalize した結果が projectPath と一致 → true
-- [ ] target が存在しないパス → エラー無く false
+- [x] `target=None` → true
+- [x] `info.projectPath == target` → true
+- [x] `info.projectName == target` → true
+- [x] `target` を canonicalize した結果が projectPath と一致 → true
+- [x] target が存在しないパス → エラー無く false
 
 `matches_mode`:
-- [ ] `mode=None` → true
-- [ ] `info.mode = "editor"` + `mode=editor` → true
-- [ ] `info.mode` 欠落 + `mode=editor` → true (古いサーバ互換)
-- [ ] `info.mode` 欠落 + `mode=runtime` → false
-- [ ] `info.mode = "unknown"` + `mode=editor` → true
+- [x] `mode=None` → true
+- [x] `info.mode = "editor"` + `mode=editor` → true
+- [x] `info.mode` 欠落 + `mode=editor` → true (古いサーバ互換)
+- [x] `info.mode` 欠落 + `mode=runtime` → false
+- [x] `info.mode = "unknown"` + `mode=editor` → true
 
 candidate_ports (mode 入り):
-- [ ] `mode=editor` + `preferred.editor=7613` → editor seed のみ
-- [ ] `mode=runtime` + `runtime=7700` + `editor=7613` → `7700..` → `7613..` の順 (runtime 優先 + editor フォールバック)
-- [ ] `mode=runtime` + runtime preferred なし → editor フォールバックのみ
-- [ ] cache に `runtime=7800` あり、`mode=editor` 指定 → 7800 は **含まれない**
+- [x] `mode=editor` + `preferred.editor=7613` → editor seed のみ
+- [x] `mode=runtime` + `runtime=7700` + `editor=7613` → `7700..` → `7613..` の順 (runtime 優先 + editor フォールバック)
+- [x] `mode=runtime` + runtime preferred なし → editor フォールバックのみ
+- [x] cache に `runtime=7800` あり、`mode=editor` 指定 → 7800 は **含まれない**
 
 Discovery (alive 複数):
-- [ ] alive 2 + 同 path / 別 mode + `--mode` なし → exit 1、ヒント `--mode editor|runtime`
-- [ ] alive 2 + 別 path + フラグなし → exit 1、ヒント `--project (または --mode)`
-- [ ] alive 2 + 同 path + 同 mode (異常) → exit 1、ヒント `--port`
-- [ ] alive 2 + `--mode editor` で 1 件 → 採用
-- [ ] alive 2 + `--project NAME` で 1 件 → 採用
-- [ ] target 指定 + 一致 0 → exit 1 + `指定のプロジェクト '...' に一致する Unity サーバーが見つかりません` + 生存リスト
-- [ ] mode 指定 + 一致 0 → exit 1 + `mode=... の Unity サーバーが生存していません` + 生存リスト
+- [x] alive 2 + 同 path / 別 mode + `--mode` なし → exit 1、ヒント `--mode editor|runtime`
+- [x] alive 2 + 別 path + フラグなし → exit 1、ヒント `--project (または --mode)`
+- [x] alive 2 + 同 path + 同 mode (異常) → exit 1、ヒント `--port`
+- [x] alive 2 + `--mode editor` で 1 件 → 採用
+- [x] alive 2 + `--project NAME` で 1 件 → 採用
+- [x] target 指定 + 一致 0 → exit 1 + `指定のプロジェクト '...' に一致する Unity サーバーが見つかりません` + 生存リスト
+- [x] mode 指定 + 一致 0 → exit 1 + `mode=... の Unity サーバーが生存していません` + 生存リスト
 
 ---
 
@@ -364,32 +382,33 @@ cwd の Unity プロジェクトの `ProjectSettings/LiminalPalette.json` を表
 **新規テスト**:
 
 `show`:
-- [ ] cwd が Unity 外 → fatal exit 1
+- [x] cwd が Unity 外 → fatal exit 1
 - [ ] config 不在 → 「(no LiminalPalette.json — IpcSettings.DefaultPort=7610 にフォールバック)」
-- [ ] config あり → port / runtimePort + raw 全行 dim
-- [ ] live listeners: ヒット 0 → 「(no listener for this project ...)」
-- [ ] live listeners: preferred と一致するなら `(matches port)` / `(matches runtimePort)` / `(matches port, runtimePort unset)`
+  - **未カバー**: 実装の表示は `(no config file — ...)`
+- [x] config あり → port / runtimePort + raw 全行 dim
+- [x] live listeners: ヒット 0 → 「(no listener for this project ...)」
+- [x] live listeners: preferred と一致するなら `(matches port)` / `(matches runtimePort)` / `(matches port, runtimePort unset)`
 
 `set-port`:
-- [ ] PORT が `0` → fatal `port は 1..65535 の範囲で指定してください`
-- [ ] PORT が `65536` → fatal
-- [ ] 新規ファイル → `$schema` + `port` の 2 キー、末尾改行 1 個、indent=2
-- [ ] 既存に `$schema` あり → 値を保持 (canonical で上書きしない)
-- [ ] 既存に `$schema` なし → canonical URL を追加 + dim メッセージ
-- [ ] 既存の他キー (`runtimePort`) は保持しつつ `port` を追記 / 更新
-- [ ] `$schema` が常に **先頭** に出る
-- [ ] `--runtime` フラグ → `runtimePort` フィールドに書く
-- [ ] 親ディレクトリ不在 → `mkdir_p`
-- [ ] 既存 JSON が壊れている → 警告 + 上書き (寛容)
+- [x] PORT が `0` → fatal `port は 1..65535 の範囲で指定してください`
+- [x] PORT が `65536` → fatal
+- [x] 新規ファイル → `$schema` + `port` の 2 キー、末尾改行 1 個、indent=2
+- [x] 既存に `$schema` あり → 値を保持 (canonical で上書きしない)
+- [x] 既存に `$schema` なし → canonical URL を追加 + dim メッセージ
+- [x] 既存の他キー (`runtimePort`) は保持しつつ `port` を追記 / 更新
+- [x] `$schema` が常に **先頭** に出る
+- [x] `--runtime` フラグ → `runtimePort` フィールドに書く
+- [x] 親ディレクトリ不在 → `mkdir_p`
+- [x] 既存 JSON が壊れている → 警告 + 上書き (寛容)
 
 `unset-port`:
-- [ ] ファイル不在 → exit 0 + 「何もしません」 (no-op)
-- [ ] JSON パース失敗 → fatal exit 1 + 修正案メッセージ (寛容にしない)
-- [ ] JSON が object でない → fatal
-- [ ] 該当フィールドが元々無い → 「元々設定されていません」
-- [ ] フィールド削除後 user 値が残る → ファイル更新メッセージ
-- [ ] フィールド削除後 `$schema` のみ残る → **ファイル削除**メッセージ
-- [ ] `--runtime` フラグ → `runtimePort` のみ削除
+- [x] ファイル不在 → exit 0 + 「何もしません」 (no-op)
+- [x] JSON パース失敗 → fatal exit 1 + 修正案メッセージ (寛容にしない)
+- [x] JSON が object でない → fatal
+- [x] 該当フィールドが元々無い → 「元々設定されていません」
+- [x] フィールド削除後 user 値が残る → ファイル更新メッセージ
+- [x] フィールド削除後 `$schema` のみ残る → **ファイル削除**メッセージ
+- [x] `--runtime` フラグ → `runtimePort` のみ削除
 
 ---
 
@@ -415,35 +434,38 @@ liminal doctor --prune-stale
 **新規テスト**:
 
 `init`:
-- [ ] cwd が Unity 外 → fatal exit 1
+- [x] cwd が Unity 外 → fatal exit 1
 - [ ] フラグなし → ファイル作成しない (実行前後で inode/mtime 不変を assert)
-- [ ] `--port 7613` → ファイル作成 + `set port = 7613`
-- [ ] `--runtime-port 7700` → `runtimePort` 設定
-- [ ] 両フラグ → 両方書き込み
-- [ ] `--port 0` → fatal `--port は 1..65535`
-- [ ] config 既存 + `$schema` 無し + フラグ無し → 黄色ヒント `liminal init --port N で再書き込み`
-- [ ] Token: ファイル不在 → `missing` 黄
-- [ ] Token: 空ファイル → `empty` 黄
+  - **未カバー**: ファイルが作られないことの assert で代替している
+- [x] `--port 7613` → ファイル作成 + `set port = 7613`
+- [x] `--runtime-port 7700` → `runtimePort` 設定
+- [x] 両フラグ → 両方書き込み
+- [x] `--port 0` → fatal `--port は 1..65535`
+- [x] config 既存 + `$schema` 無し + フラグ無し → 黄色ヒント `liminal init --port N で再書き込み`
+- [x] Token: ファイル不在 → `missing` 黄
+- [x] Token: 空ファイル → `empty` 黄
 - [ ] Token: 中身あり → `exists` 緑 + 文字数
-- [ ] AI Skills: `.claude/skills/liminal-foo` 1 個 → `installed 1 skill(s)` 緑
-- [ ] AI Skills: `lp-foo` (legacy) 検出 → 黄色警告
-- [ ] AI Skills: ディレクトリ不在 → dim メッセージ
-- [ ] CLI: バイナリ絶対パス + `ln -sf ... ~/.local/bin/liminal` ヒント
+  - **未カバー**: 文字数は表示していない (トークンの長さを画面に出さない方針)
+- [x] AI Skills: `.claude/skills/liminal-foo` 1 個 → `installed 1 skill(s)` 緑
+- [x] AI Skills: `lp-foo` (legacy) 検出 → 黄色警告
+- [x] AI Skills: ディレクトリ不在 → dim メッセージ
+- [x] CLI: バイナリ絶対パス + `ln -sf ... ~/.local/bin/liminal` ヒント
 - [ ] Live check: probe ヒットなら `● reachable on http://...` 緑、無ければ dim
-- [ ] 末尾 `init complete` 緑
+  - **未カバー**: 実装の表示は `● {port} [{mode}] {name} {path}` 形式
+- [x] 末尾 `init complete` 緑
 
 `doctor`:
-- [ ] **どんな状態でも exit 0**
-- [ ] Token セクションが Phase 2 の解決ロジックと一致 (env > file)
-- [ ] Project detection: cwd / `--project` / `$LP_PROJECT` / resolved target / `--mode` を表示
-- [ ] preferred port (port / runtimePort) を表示、未設定は dim
-- [ ] Port cache 全 entry を `port {p} [{mode}] {name} {path}` 列挙
-- [ ] cache 空 → `(empty)`
-- [ ] Live probe: 候補ポートを列挙、結果を `●` 緑 / `○` dim
-- [ ] Resolution: selected / ambiguous / no match のメッセージが Phase 6 と整合
-- [ ] `--prune-stale`: probe 対象に含まれていて応答無しの cache entry を削除
-- [ ] `--prune-stale`: 削除件数を `pruned N stale cache entry/entries` で表示
-- [ ] `--prune-stale` 未指定: cache を一切削除しない
+- [x] **どんな状態でも exit 0**
+- [x] Token セクションが Phase 2 の解決ロジックと一致 (env > file)
+- [x] Project detection: cwd / `--project` / `$LP_PROJECT` / resolved target / `--mode` を表示
+- [x] preferred port (port / runtimePort) を表示、未設定は dim
+- [x] Port cache 全 entry を `port {p} [{mode}] {name} {path}` 列挙
+- [x] cache 空 → `(empty)`
+- [x] Live probe: 候補ポートを列挙、結果を `●` 緑 / `○` dim
+- [x] Resolution: selected / ambiguous / no match のメッセージが Phase 6 と整合
+- [x] `--prune-stale`: probe 対象に含まれていて応答無しの cache entry を削除
+- [x] `--prune-stale`: 削除件数を `pruned N stale cache entry/entries` で表示
+- [x] `--prune-stale` 未指定: cache を一切削除しない
 
 ---
 
@@ -463,28 +485,28 @@ echo $?  # PASS なら 0、FAIL なら 2
 **新規テスト**:
 
 リクエスト:
-- [ ] `run Foo/Bar` → POST body `{"path":"Foo/Bar"}`
-- [ ] 引数なし → fatal `path か --steps を指定`
+- [x] `run Foo/Bar` → POST body `{"path":"Foo/Bar"}`
+- [x] 引数なし → fatal `path か --steps を指定`
 
 出力 (text):
-- [ ] PASS → `PASS Foo/Bar (12.5 ms)` 緑
-- [ ] FAIL → `FAIL Foo/Bar (12.5 ms)` 赤 + `failedAtStep: N`
-- [ ] 各 step: `✓ [i] Kind extra (Nms)` 形式
-- [ ] `kind=Command` → `extra = commandPath`
-- [ ] `kind=AssertEquals` 失敗 → `actual=X  <error 赤>`
-- [ ] `kind=AssertEquals` 成功 → `actual=X` のみ
-- [ ] `kind=AssertNotEquals` も同様
+- [x] PASS → `PASS Foo/Bar (12.5 ms)` 緑
+- [x] FAIL → `FAIL Foo/Bar (12.5 ms)` 赤 + `failedAtStep: N`
+- [x] 各 step: `✓ [i] Kind extra (Nms)` 形式
+- [x] `kind=Command` → `extra = commandPath`
+- [x] `kind=AssertEquals` 失敗 → `actual=X  <error 赤>`
+- [x] `kind=AssertEquals` 成功 → `actual=X` のみ
+- [x] `kind=AssertNotEquals` も同様
 
 出力 (json):
-- [ ] レスポンス body をそのまま整形出力
+- [x] レスポンス body をそのまま整形出力
 
 Exit code:
-- [ ] PASS → exit 0
-- [ ] FAIL → exit 2
-- [ ] FAIL + `--json` → JSON 出力 + exit 2
-- [ ] HTTP 500 → exit 1
-- [ ] HTTP 409 (alreadyRunning) → exit 1
-- [ ] HTTP 429 (rate limit) → exit 1
+- [x] PASS → exit 0
+- [x] FAIL → exit 2
+- [x] FAIL + `--json` → JSON 出力 + exit 2
+- [x] HTTP 500 → exit 1
+- [x] HTTP 409 (alreadyRunning) → exit 1
+- [x] HTTP 429 (rate limit) → exit 1
 
 ---
 
@@ -507,41 +529,41 @@ liminal run 'Combat/Enemy*'
 **新規テスト**:
 
 glob マッチャ:
-- [ ] `*` が空文字列にマッチ
-- [ ] `*` が `/` を跨ぐ (`Battle/*` が `Battle/Repro/X` にヒット) — `globset` との違いの回帰テスト
-- [ ] `?` が任意の 1 文字 (`/` 含む) にマッチ
-- [ ] `[abc]` が a/b/c にマッチ、d にマッチしない
-- [ ] `[!abc]` (否定) が d にマッチ
-- [ ] `[a-c]` のレンジ
-- [ ] 大文字小文字は区別 (`fnmatchcase`)
-- [ ] エスケープなし (`\` を特別扱いしない)
-- [ ] リテラルのみ → 完全一致のみ true
+- [x] `*` が空文字列にマッチ
+- [x] `*` が `/` を跨ぐ (`Battle/*` が `Battle/Repro/X` にヒット) — `globset` との違いの回帰テスト
+- [x] `?` が任意の 1 文字 (`/` 含む) にマッチ
+- [x] `[abc]` が a/b/c にマッチ、d にマッチしない
+- [x] `[!abc]` (否定) が d にマッチ
+- [x] `[a-c]` のレンジ
+- [x] 大文字小文字は区別 (`fnmatchcase`)
+- [x] エスケープなし (`\` を特別扱いしない)
+- [x] リテラルのみ → 完全一致のみ true
 
 glob モード判定:
-- [ ] `Battle/Plain` → glob モードに入らない (通常実行)
-- [ ] `Battle/*` / `Battle/?` / `Battle/[A-Z]` → glob モード
+- [x] `Battle/Plain` → glob モードに入らない (通常実行)
+- [x] `Battle/*` / `Battle/?` / `Battle/[A-Z]` → glob モード
 
 実行統合:
-- [ ] `/scenarios` を 1 回引いてフィルタ
-- [ ] マッチ 0 件 → fatal `glob '...' に一致するシナリオがありません`
-- [ ] マッチ複数 → ソートして順次 POST
-- [ ] glob にヒットしないものは実行されない (POST 数を assert)
+- [x] `/scenarios` を 1 回引いてフィルタ
+- [x] マッチ 0 件 → fatal `glob '...' に一致するシナリオがありません`
+- [x] マッチ複数 → ソートして順次 POST
+- [x] glob にヒットしないものは実行されない (POST 数を assert)
 
 出力 (glob・text):
-- [ ] 各 scenario 1 行: `✓ Foo/Bar  (12 ms)` または `✗ Foo/Bar  (12 ms)  failedAtStep=N`
-- [ ] FAIL の次行に `      <error>` 赤
-- [ ] サマリ `PASS|FAIL  N scenarios, P passed, F failed  (T ms total)`
-- [ ] 全 pass で `PASS` 緑、1 つでも fail で `FAIL` 赤
-- [ ] label の幅は `min(max, 60)` で揃う
+- [x] 各 scenario 1 行: `✓ Foo/Bar  (12 ms)` または `✗ Foo/Bar  (12 ms)  failedAtStep=N`
+- [x] FAIL の次行に `      <error>` 赤
+- [x] サマリ `PASS|FAIL  N scenarios, P passed, F failed  (T ms total)`
+- [x] 全 pass で `PASS` 緑、1 つでも fail で `FAIL` 赤
+- [x] label の幅は `min(max, 60)` で揃う
 
 出力 (glob・json):
-- [ ] payload `{scenarios:[...], total, passed, failed}`
-- [ ] 各 entry の `path` は **label** で resp の path を上書き (ad-hoc 時の null 対策)
+- [x] payload `{scenarios:[...], total, passed, failed}`
+- [x] 各 entry の `path` は **label** で resp の path を上書き (ad-hoc 時の null 対策)
 
 Exit code:
-- [ ] glob 全 pass → exit 0
-- [ ] glob 1 件以上 fail → exit 2
-- [ ] glob 展開時の HTTP 500 → exit 1
+- [x] glob 全 pass → exit 0
+- [x] glob 1 件以上 fail → exit 2
+- [x] glob 展開時の HTTP 500 → exit 1
 
 ---
 
@@ -563,41 +585,41 @@ liminal run 'Battle/**' --report reports/liminal.xml
 **新規テスト**:
 
 入力モード排他:
-- [ ] `run Foo --steps file` → fatal `path と --steps は同時に指定できません`
-- [ ] `run --steps file` (PATH 無し) → OK
-- [ ] `run` (両方無し) → fatal
+- [x] `run Foo --steps file` → fatal `path と --steps は同時に指定できません`
+- [x] `run --steps file` (PATH 無し) → OK
+- [x] `run` (両方無し) → fatal
 
 ad-hoc body builder:
-- [ ] JSON 配列 → body `{"steps":[...]}`
-- [ ] `{"steps":[...]}` → そのまま
-- [ ] `{"foo":1}` (steps 無し) → fatal
-- [ ] 文字列 / 数値 → fatal
-- [ ] パース失敗 → fatal
-- [ ] `--steps -` → stdin から読む
-- [ ] ファイル不在 → fatal
+- [x] JSON 配列 → body `{"steps":[...]}`
+- [x] `{"steps":[...]}` → そのまま
+- [x] `{"foo":1}` (steps 無し) → fatal
+- [x] 文字列 / 数値 → fatal
+- [x] パース失敗 → fatal
+- [x] `--steps -` → stdin から読む
+- [x] ファイル不在 → fatal
 
 XML エスケープ:
-- [ ] `&` → `&amp;` (二重エスケープしない: `&lt;` 入力 → `&amp;lt;`)
-- [ ] `<` → `&lt;`、`>` → `&gt;`、`"` → `&quot;`
-- [ ] `'` は **エスケープしない**
+- [x] `&` → `&amp;` (二重エスケープしない: `&lt;` 入力 → `&amp;lt;`)
+- [x] `<` → `&lt;`、`>` → `&gt;`、`"` → `&quot;`
+- [x] `'` は **エスケープしない**
 
 JUnit XML 生成:
-- [ ] 全 pass: `<testcase name="..." time="0.012"/>` のみ + `failures="0"`
-- [ ] failure 1 件: `<failure message="..." >...</failure>`
-- [ ] `failedAtStep` が範囲内 → message に `failedAtStep=N — Kind — error` (` — ` 区切り)
-- [ ] `failedAtStep` 範囲外 + `resp.error` あり → body に `resp.error` 1 行
-- [ ] `failedAtStep` 範囲外 + `resp.error` なし → body 空
-- [ ] body 行: `step[N] Kind` / `  actualValue: ...` (非 null) / `  expected: ...` (非 null) / `  error: ...`
-- [ ] `time` は `{:.3}` 秒
-- [ ] testsuites > testsuite で 2 重に囲む、`name="liminal"` 固定
-- [ ] 末尾改行 1 個
-- [ ] `name` 内の `<` がエスケープされる (XML injection 防止)
+- [x] 全 pass: `<testcase name="..." time="0.012"/>` のみ + `failures="0"`
+- [x] failure 1 件: `<failure message="..." >...</failure>`
+- [x] `failedAtStep` が範囲内 → message に `failedAtStep=N — Kind — error` (` — ` 区切り)
+- [x] `failedAtStep` 範囲外 + `resp.error` あり → body に `resp.error` 1 行
+- [x] `failedAtStep` 範囲外 + `resp.error` なし → body 空
+- [x] body 行: `step[N] Kind` / `  actualValue: ...` (非 null) / `  expected: ...` (非 null) / `  error: ...`
+- [x] `time` は `{:.3}` 秒
+- [x] testsuites > testsuite で 2 重に囲む、`name="liminal"` 固定
+- [x] 末尾改行 1 個
+- [x] `name` 内の `<` がエスケープされる (XML injection 防止)
 
 `--report` 統合:
-- [ ] PATH 親ディレクトリ不在 → `mkdir_p`
-- [ ] 書き込み失敗 (権限なし) → fatal exit 1
-- [ ] テキストモードで書いた場合 stderr (or stdout) に `JUnit report: <path>` を dim
-- [ ] `--json` と併用しても XML 書き込みは行う
+- [x] PATH 親ディレクトリ不在 → `mkdir_p`
+- [x] 書き込み失敗 (権限なし) → fatal exit 1
+- [x] テキストモードで書いた場合 stderr (or stdout) に `JUnit report: <path>` を dim
+- [x] `--json` と併用しても XML 書き込みは行う
 
 ---
 
@@ -608,17 +630,17 @@ JUnit XML 生成:
 **仕上げテスト**:
 
 `clap` 引数:
-- [ ] `liminal --help` → exit 0、サブコマンド一覧
-- [ ] `liminal exec --help` → サブコマンドヘルプ
-- [ ] サブコマンドなし → clap がエラー
-- [ ] 未知のサブコマンド → エラー
-- [ ] グローバルフラグはサブコマンド前後どちらでも置ける (`liminal --json health` / `liminal health --json`)
-- [ ] `--mode foo` (enum 違反) → clap エラー
+- [x] `liminal --help` → exit 0、サブコマンド一覧
+- [x] `liminal exec --help` → サブコマンドヘルプ
+- [x] サブコマンドなし → clap がエラー
+- [x] 未知のサブコマンド → エラー
+- [x] グローバルフラグはサブコマンド前後どちらでも置ける (`liminal --json health` / `liminal health --json`)
+- [x] `--mode foo` (enum 違反) → clap エラー
 
 副作用:
-- [ ] 通常コマンド (`health` / `exec` / `commands` / 他) は cache 以外を書かない
-- [ ] cache の更新は alive 探索の副作用としてのみ
-- [ ] `init` フラグなしは ProjectSettings 配下を一切書かない
+- [x] 通常コマンド (`health` / `exec` / `commands` / 他) は cache 以外を書かない
+- [x] cache の更新は alive 探索の副作用としてのみ
+- [x] `init` フラグなしは ProjectSettings 配下を一切書かない
 
 Exit code 一覧 (回帰):
 
@@ -640,7 +662,7 @@ Exit code 一覧 (回帰):
 | `init` 成功 | 0 |
 | `init` cwd 非 Unity | 1 |
 | `project set-port 70000` | 1 |
-| 引数パース失敗 | 2 (clap 既定) |
+| 引数パース失敗 | 1 (SPEC §11。clap 既定の 2 は「サーバには届いたが失敗」と衝突するため `main` で 1 に倒している。`--help` / `--version` は 0) |
 
 ---
 

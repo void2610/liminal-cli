@@ -174,8 +174,9 @@ fn exec_値側に等号があっても最初の等号で分割される() {
 }
 
 #[test]
-fn exec_引数_等号無しは_clap_エラーで_exit_2() {
-    // clap の引数パースエラーは exit 2 (clap 既定) になる
+fn exec_引数_等号無しは_引数エラーで_exit_1() {
+    // SPEC §11: 引数エラーは 1。2 は「サーバには届いたが失敗」に予約されている
+    // (clap 既定の 2 のままだと run/exec の失敗と区別できない)
     cmd()
         .args([
             "--base-url",
@@ -187,7 +188,7 @@ fn exec_引数_等号無しは_clap_エラーで_exit_2() {
             "novalue",
         ])
         .assert()
-        .failure();
+        .code(1);
 }
 
 #[test]
