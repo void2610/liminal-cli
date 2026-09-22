@@ -363,8 +363,11 @@ pub(crate) fn resolve(opts: &DiscoveryOptions) -> anyhow::Result<Resolved> {
     let candidates = candidate_ports(opts.port, preferred, opts.mode, &cache_entries);
     let mut alive: Vec<Alive> = Vec::new();
     let mut bodies: Vec<(u16, Map<String, Value>)> = Vec::new();
-    for port in &candidates {
-        if let Some(body) = crate::http::probe_port(*port, crate::http::PROBE_TIMEOUT) {
+    for (port, probed) in candidates.iter().zip(crate::http::probe_all(
+        &candidates,
+        crate::http::PROBE_TIMEOUT,
+    )) {
+        if let Some(body) = probed {
             alive.push(Alive::from_health(*port, &body));
             bodies.push((*port, body));
         }

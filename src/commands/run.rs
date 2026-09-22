@@ -16,34 +16,40 @@ const RUN_ENDPOINT: &str = "/api/v1/scenarios/run";
 
 /// `liminal run`。named / glob / ad-hoc の 3 モード (SPEC §4.10)。
 pub(crate) fn run(client: &Client, args: &RunArgs, json_out: bool) -> Result<()> {
-    let results: Vec<(String, ScenarioRunResponse)> = match (&args.path, &args.steps) {
+    // (label, 生レスポンス) を保持する。--json はこの生の値をそのまま出す。
+    let results: Vec<(String, Value)> = match (&args.path, &args.steps) {
         (Some(_), Some(_)) => bail!("PATH と --steps は同時に指定できません"),
         (None, None) => bail!("PATH か --steps のどちらかを指定してください"),
         // ad-hoc: ステップ定義をそのまま中継する (バリデーションはサーバに任せる)
         (None, Some(src)) => {
             let steps = load_steps(src)?;
-            let resp: ScenarioRunResponse =
-                client.post_json(RUN_ENDPOINT, &json!({"steps": steps}))?;
+            let resp = client.post_value(RUN_ENDPOINT, &json!({"steps": steps}))?;
             vec![("(ad-hoc)".to_string(), resp)]
         }
         (Some(path), None) if has_magic(path) => run_glob(client, path)?,
         (Some(path), None) => {
-            let resp: ScenarioRunResponse =
-                client.post_json(RUN_ENDPOINT, &json!({"path": path}))?;
+            let resp = client.post_value(RUN_ENDPOINT, &json!({"path": path}))?;
             vec![(path.clone(), resp)]
         }
     };
 
+    // テキスト表示・集計・レポートには型に落とした値を使う。
+    let typed: Vec<(String, ScenarioRunResponse)> = results
+        .iter()
+        .map(|(label, v)| {
+            serde_json::from_value(v.clone()).map(|r: ScenarioRunResponse| (label.clone(), r))
+        })
+        .collect::<Result<_, _>>()?;
+
     let multiple = results.len() > 1 || args.path.as_deref().is_some_and(has_magic);
     if multiple {
-        render_multi(&results, json_out)?;
+        render_multi(&results, &typed, json_out)?;
     } else {
-        let (label, resp) = &results[0];
-        render_single(label, resp, json_out)?;
+        render_single(&results[0].0, &results[0].1, &typed[0].1, json_out)?;
     }
 
     if let Some(report) = &args.report {
-        let cases: Vec<Case<'_>> = results
+        let cases: Vec<Case<'_>> = typed
             .iter()
             .map(|(label, resp)| Case { label, resp })
             .collect();
@@ -51,15 +57,15 @@ pub(crate) fn run(client: &Client, args: &RunArgs, json_out: bool) -> Result<()>
     }
 
     // 1 つでも失敗していれば exit 2 (SPEC §11)
-    if results.iter().any(|(_, r)| !r.success) {
+    if typed.iter().any(|(_, r)| !r.success) {
         return Err(ExecFailure.into());
     }
     Ok(())
 }
 
 // glob モード: シナリオ一覧を引いてパターン一致を順に実行する。
-fn run_glob(client: &Client, pattern: &str) -> Result<Vec<(String, ScenarioRunResponse)>> {
-    let list: ScenariosResponse = client.get_scenarios("/api/v1/scenarios")?;
+fn run_glob(client: &Client, pattern: &str) -> Result<Vec<(String, Value)>> {
+    let list: ScenariosResponse = serde_json::from_value(client.get_value("/api/v1/scenarios")?)?;
     let mut matched: Vec<String> = list
         .scenarios
         .into_iter()
@@ -74,7 +80,7 @@ fn run_glob(client: &Client, pattern: &str) -> Result<Vec<(String, ScenarioRunRe
 
     let mut out = Vec::with_capacity(matched.len());
     for path in matched {
-        let resp: ScenarioRunResponse = client.post_json(RUN_ENDPOINT, &json!({"path": path}))?;
+        let resp = client.post_value(RUN_ENDPOINT, &json!({"path": path}))?;
         out.push((path, resp));
     }
     Ok(out)
@@ -100,9 +106,10 @@ fn load_steps(src: &str) -> Result<Value> {
     }
 }
 
-fn render_single(label: &str, r: &ScenarioRunResponse, json_out: bool) -> Result<()> {
+fn render_single(label: &str, raw: &Value, r: &ScenarioRunResponse, json_out: bool) -> Result<()> {
     if json_out {
-        println!("{}", serde_json::to_string_pretty(r)?);
+        // サーバが増やしたフィールドを落とさないよう、生のレスポンスをそのまま出す
+        println!("{}", serde_json::to_string_pretty(raw)?);
         return Ok(());
     }
 
@@ -150,17 +157,21 @@ fn step_extra(s: &crate::http::ScenarioStepResult) -> String {
     }
 }
 
-fn render_multi(results: &[(String, ScenarioRunResponse)], json_out: bool) -> Result<()> {
+fn render_multi(
+    raw: &[(String, Value)],
+    results: &[(String, ScenarioRunResponse)],
+    json_out: bool,
+) -> Result<()> {
     let passed = results.iter().filter(|(_, r)| r.success).count();
     let failed = results.len() - passed;
     let total_ms: f64 = results.iter().map(|(_, r)| r.duration_ms).sum();
 
     if json_out {
         // label は最後に入れて resp.path を上書きする (ad-hoc で null になる対策、SPEC §4.10)
-        let items: Vec<Value> = results
+        let items: Vec<Value> = raw
             .iter()
-            .map(|(label, r)| {
-                let mut v = serde_json::to_value(r).unwrap_or(Value::Null);
+            .map(|(label, v)| {
+                let mut v = v.clone();
                 if let Value::Object(map) = &mut v {
                     map.insert("path".into(), Value::from(label.clone()));
                 }

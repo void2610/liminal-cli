@@ -5,45 +5,11 @@
 
 mod common;
 
-use common::cmd;
+use common::{cmd, free_port, health_body, temp_home, temp_project_with_port, write_port_cache};
 use httpmock::Method::GET;
 use httpmock::MockServer;
 use predicates::prelude::*;
-use std::net::TcpListener;
 use tempfile::TempDir;
-
-fn health_body(mode: &str, name: &str, path: &str) -> String {
-    format!(
-        r#"{{"status":"ok","version":"0.2.0","mode":"{mode}","projectName":"{name}",
-             "projectPath":"{path}","commandCount":1}}"#
-    )
-}
-
-/// 誰も listen していないポートを 1 つ得る (bind して即 drop する)。
-fn free_port() -> u16 {
-    let l = TcpListener::bind("127.0.0.1:0").unwrap();
-    let p = l.local_addr().unwrap().port();
-    drop(l);
-    p
-}
-
-/// Unity プロジェクトに見える一時ディレクトリ (preferred port 付き)。
-fn project_with_port(port: u16) -> TempDir {
-    let tmp = TempDir::new().unwrap();
-    let ps = tmp.path().join("ProjectSettings");
-    std::fs::create_dir_all(&ps).unwrap();
-    std::fs::write(
-        ps.join("ProjectVersion.txt"),
-        "m_EditorVersion: 6000.0.0f1\n",
-    )
-    .unwrap();
-    std::fs::write(
-        ps.join("LiminalPalette.json"),
-        format!(r#"{{"port":{port}}}"#),
-    )
-    .unwrap();
-    tmp
-}
 
 #[test]
 fn discovery_port指定でそのポートだけを使う() {
@@ -79,7 +45,7 @@ fn discovery_preferred_port_を候補に含める() {
         then.status(200)
             .body(health_body("editor", "Pref", "/pref"));
     });
-    let tmp = project_with_port(server.port());
+    let tmp = temp_project_with_port(server.port());
 
     // SPEC §5-5 は候補を全部 probe してから選ぶ (生存が複数なら曖昧エラーにするため)。
     // テストは他テストの mock サーバも同時に生きているので、--project で対象を確定させる。
@@ -195,7 +161,7 @@ fn discovery_base_url指定は_discovery_をバイパスする() {
     });
 
     // preferred port は全く別 (到達不能) でも --base-url が勝つ
-    let tmp = project_with_port(free_port());
+    let tmp = temp_project_with_port(free_port());
 
     cmd()
         .current_dir(tmp.path())
@@ -225,16 +191,9 @@ fn discovery_port_明示時はキャッシュ早出しをしない() {
             .body(health_body("editor", "MyGame", "/dev/MyGame"));
     });
 
-    let home = TempDir::new().unwrap();
-    std::fs::create_dir_all(home.path().join(".liminal-palette")).unwrap();
-    std::fs::write(
-        home.path().join(".liminal-palette/ports.json"),
-        format!(
-            r#"{{"version":2,"projects":{{"/dev/MyGame":{{"projectName":"MyGame","ports":{{"editor":{}}}}}}}}}"#,
-            free_port()
-        ),
-    )
-    .unwrap();
+    // キャッシュには死んでいるポートを載せておく
+    let home = temp_home();
+    write_port_cache(home.path(), "/dev/MyGame", "MyGame", free_port());
 
     // キャッシュ上の (死んでいる) ポートに引っぱられず、--port が勝つ
     cmd()
@@ -260,7 +219,7 @@ fn discovery_cwdのプロジェクトが既定のターゲットになる() {
         then.status(200)
             .body(health_body("editor", "Other", "/dev/Other"));
     });
-    let tmp = project_with_port(server.port());
+    let tmp = temp_project_with_port(server.port());
 
     cmd()
         .current_dir(tmp.path())
@@ -280,7 +239,7 @@ fn discovery_project指定時はそのディレクトリの_preferred_を使う(
         then.status(200)
             .body(health_body("editor", "Far", "/dev/Far"));
     });
-    let target = project_with_port(server.port());
+    let target = temp_project_with_port(server.port());
     let elsewhere = TempDir::new().unwrap();
 
     cmd()

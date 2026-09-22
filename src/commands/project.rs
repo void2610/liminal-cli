@@ -10,7 +10,7 @@ use crate::discovery::{
     Alive, Mode, PreferredPorts, candidate_ports, detect_project, project_config_path,
     read_project_config,
 };
-use crate::http::{PROBE_TIMEOUT, probe_port};
+use crate::http::{PROBE_TIMEOUT, probe_all};
 use crate::style::{CYAN, DIM, GREEN, YELLOW};
 
 /// Project config に自動付与する JSON Schema の URL (SPEC §2)。
@@ -184,9 +184,11 @@ fn probe_project_listeners(
 ) -> Vec<Alive> {
     let cache = cache::load();
     let root_str = root.to_string_lossy().to_string();
-    candidate_ports(None, preferred, mode, &cache.entries())
-        .into_iter()
-        .filter_map(|p| probe_port(p, PROBE_TIMEOUT).map(|b| Alive::from_health(p, &b)))
+    let ports = candidate_ports(None, preferred, mode, &cache.entries());
+    ports
+        .iter()
+        .zip(probe_all(&ports, PROBE_TIMEOUT))
+        .filter_map(|(p, b)| b.map(|b| Alive::from_health(*p, &b)))
         .filter(|a| a.project_path == root_str)
         .collect()
 }

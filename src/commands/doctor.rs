@@ -6,7 +6,7 @@ use crate::cli::DoctorArgs;
 use crate::discovery::{
     Alive, Mode, candidate_ports, detect_project, read_project_config, resolve_target, select_alive,
 };
-use crate::http::{PROBE_TIMEOUT, probe_port};
+use crate::http::{PROBE_TIMEOUT, probe_all};
 use crate::style::{CYAN, DIM, GREEN, YELLOW};
 
 /// `liminal doctor`。純粋な診断なので、どんな状態でも Ok(()) で返す (SPEC §4.3)。
@@ -37,8 +37,8 @@ pub(crate) fn run(
     println!("{CYAN}Live probe ({} ports){CYAN:#}", ports.len());
     let mut alive: Vec<Alive> = Vec::new();
     let mut dead: Vec<u16> = Vec::new();
-    for p in &ports {
-        match probe_port(*p, PROBE_TIMEOUT) {
+    for (p, probed) in ports.iter().zip(probe_all(&ports, PROBE_TIMEOUT)) {
+        match probed {
             Some(body) => {
                 let a = Alive::from_health(*p, &body);
                 println!(

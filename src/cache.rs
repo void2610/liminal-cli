@@ -282,4 +282,22 @@ mod tests {
     fn cache_書き出しは末尾改行付き() {
         assert!(sample().to_json().ends_with("}\n"));
     }
+
+    #[test]
+    fn cache_projectsが配列なら空扱い() {
+        let raw = r#"{"version":2,"projects":[]}"#;
+        assert_eq!(PortCache::from_json(raw), PortCache::default());
+    }
+
+    #[test]
+    fn cache_非ASCIIのprojectNameはエスケープせず書く() {
+        let mut c = PortCache::default();
+        c.record("/dev/ゲーム", "ゲーム", "editor", 7610);
+        let json = c.to_json();
+        assert!(json.contains("ゲーム"), "{json}");
+        assert!(
+            !json.contains("\\u30"),
+            "非 ASCII が \\uXXXX に落ちている: {json}"
+        );
+    }
 }

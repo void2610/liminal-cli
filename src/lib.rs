@@ -13,17 +13,28 @@ use std::collections::HashMap;
 use anyhow::Result;
 use cli::{Cli, Command, ModeArg};
 use discovery::{DiscoveryOptions, Mode};
-use http::{Client, CommandsResponse, HealthResponse};
+use http::Client;
 use render::{render_commands, render_health};
 use token::get_token;
 
+use serde_json::Value;
+
 use crate::{
-    http::{
-        ExecRequest, ExecResponse, LogsResponse, ScenariosResponse, StateList, StateValue,
-        percent_encode,
-    },
+    http::{ExecRequest, percent_encode},
     render::{render_exec, render_logs, render_scenarios, render_state_list, render_state_value},
 };
+
+/// `{key: [ {path: ...}, ... ]}` の配列を path prefix で絞り込む。
+/// `--json` は絞り込み後を出すので、生の Value の段階で落とす (SPEC §4.5 / §4.9)。
+fn retain_by_path(v: &mut Value, key: &str, prefix: &str) {
+    if let Some(Value::Array(items)) = v.get_mut(key) {
+        items.retain(|item| {
+            item.get("path")
+                .and_then(Value::as_str)
+                .is_some_and(|p| p.starts_with(prefix))
+        });
+    }
+}
 
 impl From<ModeArg> for Mode {
     fn from(m: ModeArg) -> Self {
@@ -77,31 +88,29 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Init(_) | Command::Doctor(_) | Command::Project(_) => unreachable!(),
         Command::Health => {
             // discovery 中に取得済みの body があれば使い回す (probe と本リクエストの二度打ちを避ける)
-            let h: HealthResponse = match resolved.health {
-                Some(body) => serde_json::from_value(serde_json::Value::Object(body))?,
-                None => client.get_response::<HealthResponse>("/api/v1/health")?,
+            let v = match resolved.health {
+                Some(body) => Value::Object(body),
+                None => client.get_value("/api/v1/health")?,
             };
-            render_health(&h, &url, cli.json)?;
+            render_health(&v, &url, cli.json)?;
         }
         Command::Commands(args) => {
-            // コマンド一覧
-            let mut commands: CommandsResponse =
-                client.get_response::<CommandsResponse>("/api/v1/commands")?;
+            let mut v = client.get_value("/api/v1/commands")?;
             // --filter 指定時は path prefix が一致するもののみ残す (case-sensitive、SPEC §4.5)
             if let Some(filter) = args.filter {
-                commands.commands.retain(|c| c.path.starts_with(&filter));
+                retain_by_path(&mut v, "commands", &filter);
             }
-            render_commands(&commands, cli.json)?;
+            render_commands(&v, cli.json)?;
         }
         Command::Exec(args) => {
             // Vec<(String, String)> → HashMap<String, String>
             let args_map: HashMap<String, String> = args.args.into_iter().collect();
-            let body: ExecRequest = ExecRequest {
+            let body = serde_json::to_value(ExecRequest {
                 path: args.path,
                 args: args_map,
-            };
-            let res: ExecResponse = client.post_exec("/api/v1/execute", &body)?;
-            render_exec(&res, cli.json)?;
+            })?;
+            let v = client.post_value("/api/v1/execute", &body)?;
+            render_exec(&v, cli.json)?;
         }
         Command::Logs(args) => {
             // SPEC §4.7: --limit 未指定なら ?limit クエリは付けない
@@ -109,31 +118,30 @@ pub fn run(cli: Cli) -> Result<()> {
                 Some(n) => format!("/api/v1/logs?limit={}", n),
                 None => "/api/v1/logs".to_string(),
             };
-            let res: LogsResponse = client.get_response::<LogsResponse>(&endpoint)?;
-            render_logs(&res, cli.json)?;
+            let v = client.get_value(&endpoint)?;
+            render_logs(&v, cli.json)?;
         }
         Command::State(args) => {
             // SPEC §4.8: PATH 指定時は単一フィールド、未指定なら全件
             match args.path {
                 Some(path) => {
                     let endpoint = format!("/api/v1/state?path={}", percent_encode(&path));
-                    let res: StateValue = client.get_response::<StateValue>(&endpoint)?;
-                    render_state_value(&res, cli.json)?;
+                    let v = client.get_value(&endpoint)?;
+                    render_state_value(&v, cli.json)?;
                 }
                 None => {
-                    let res: StateList = client.get_response::<StateList>("/api/v1/state")?;
-                    render_state_list(&res, cli.json)?;
+                    let v = client.get_value("/api/v1/state")?;
+                    render_state_list(&v, cli.json)?;
                 }
             }
         }
         Command::Scenarios(args) => {
-            let mut res: ScenariosResponse =
-                client.get_response::<ScenariosResponse>("/api/v1/scenarios")?;
+            let mut v = client.get_value("/api/v1/scenarios")?;
             // --filter 指定時は path prefix が一致するもののみ残す (commands と同じ規約)
             if let Some(filter) = args.filter {
-                res.scenarios.retain(|s| s.path.starts_with(&filter));
+                retain_by_path(&mut v, "scenarios", &filter);
             }
-            render_scenarios(&res, cli.json)?;
+            render_scenarios(&v, cli.json)?;
         }
         Command::Run(args) => {
             commands::run::run(&client, &args, cli.json)?;
