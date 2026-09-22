@@ -37,13 +37,7 @@ fn logs_一覧と_shown_total_行() {
     });
 
     cmd()
-        .args([
-            "--base-url",
-            &server.base_url(),
-            "--token",
-            "dummy",
-            "logs",
-        ])
+        .args(["--base-url", &server.base_url(), "--token", "dummy", "logs"])
         .assert()
         .success()
         .stdout(predicate::str::contains("Player/Health/Heal"))
@@ -62,13 +56,7 @@ fn logs_success_と_failure_でマーカーが分かれる() {
     });
 
     cmd()
-        .args([
-            "--base-url",
-            &server.base_url(),
-            "--token",
-            "dummy",
-            "logs",
-        ])
+        .args(["--base-url", &server.base_url(), "--token", "dummy", "logs"])
         .assert()
         .success()
         .stdout(predicate::str::contains("✓"))
@@ -86,13 +74,7 @@ fn logs_args_あり時に_args_行を表示() {
     });
 
     cmd()
-        .args([
-            "--base-url",
-            &server.base_url(),
-            "--token",
-            "dummy",
-            "logs",
-        ])
+        .args(["--base-url", &server.base_url(), "--token", "dummy", "logs"])
         .assert()
         .success()
         .stdout(predicate::str::contains("amount=10"));
@@ -109,13 +91,7 @@ fn logs_失敗時は_error_行を表示() {
     });
 
     cmd()
-        .args([
-            "--base-url",
-            &server.base_url(),
-            "--token",
-            "dummy",
-            "logs",
-        ])
+        .args(["--base-url", &server.base_url(), "--token", "dummy", "logs"])
         .assert()
         .success()
         .stdout(predicate::str::contains("error: not found"));
@@ -160,13 +136,7 @@ fn logs_0件で_no_invocations() {
     });
 
     cmd()
-        .args([
-            "--base-url",
-            &server.base_url(),
-            "--token",
-            "dummy",
-            "logs",
-        ])
+        .args(["--base-url", &server.base_url(), "--token", "dummy", "logs"])
         .assert()
         .success()
         .stdout(predicate::str::contains("(no invocations)"));

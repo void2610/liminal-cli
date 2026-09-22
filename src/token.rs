@@ -36,16 +36,14 @@ fn read_token_file() -> Option<String> {
 }
 
 #[cfg(test)]
+// テスト名は日本語で書く方針のため、snake_case 検査から除外する
+#[allow(non_snake_case)]
 mod tests {
     use super::*;
 
     #[test]
     fn token_arg_が_最優先() {
-        let r = resolve_token(
-            Some("arg".into()),
-            Some("env".into()),
-            Some("file".into()),
-        );
+        let r = resolve_token(Some("arg".into()), Some("env".into()), Some("file".into()));
         assert_eq!(r, Some("arg".into()));
     }
 

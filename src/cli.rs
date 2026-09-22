@@ -1,13 +1,24 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(version, about)]
 pub struct Cli {
-    // グローバルオプション
-    #[arg(long, global = true)]
+    // グローバルオプション (SPEC §3)
+    /// ベース URL を直接指定する (discovery をバイパス)
+    #[arg(long, global = true, value_name = "URL")]
     pub base_url: Option<String>,
-    #[arg(long, global = true)]
+    /// ポートだけ指定する (隣接探索もしない)
+    #[arg(long, global = true, value_name = "N")]
+    pub port: Option<u16>,
+    /// 対象プロジェクトを名前かパスで指定する
+    #[arg(long, global = true, value_name = "NAME_OR_PATH")]
+    pub project: Option<String>,
+    /// Editor 側か Play Mode 側かを指定する
+    #[arg(long, global = true, value_name = "MODE")]
+    pub mode: Option<ModeArg>,
+    #[arg(long, global = true, value_name = "TOKEN")]
     pub token: Option<String>,
+    /// JSON を生のまま出力する
     #[arg(long, global = true)]
     pub json: bool,
 
@@ -16,11 +27,24 @@ pub struct Cli {
     pub(crate) command: Command,
 }
 
+/// `--mode` の値。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ModeArg {
+    Editor,
+    Runtime,
+}
+
 #[derive(Subcommand)]
 pub(crate) enum Command {
-    // Init,
+    /// プロジェクトの onboarding 状態を表示し、必要なら preferred port を書き込む
+    Init(InitArgs),
+    /// サーバの生存を確認する
     Health,
-    // Doctor,
+    /// 環境を診断する (token / プロジェクト検出 / キャッシュ / 生存ポート)
+    Doctor(DoctorArgs),
+    /// プロジェクト設定を表示 / 変更する
+    #[command(subcommand)]
+    Project(ProjectCommand),
     /// コマンド一覧を取得する
     Commands(CommandsArgs),
     /// コマンドを実行する
@@ -31,10 +55,67 @@ pub(crate) enum Command {
     State(StateArgs),
     /// シナリオ一覧を取得する
     Scenarios(ScenariosArgs),
-    // Run,
+    /// シナリオを実行する (named / glob / ad-hoc)
+    Run(RunArgs),
 }
 
-impl Command {}
+#[derive(Subcommand)]
+pub(crate) enum ProjectCommand {
+    /// 現在のプロジェクト設定と live listener を表示する
+    Show,
+    /// preferred port を書き込む
+    SetPort(SetPortArgs),
+    /// preferred port を削除する
+    UnsetPort(UnsetPortArgs),
+}
+
+#[derive(Args)]
+pub struct InitArgs {
+    /// Play Mode 用 preferred port を書き込む
+    #[arg(long, value_name = "N")]
+    pub runtime_port: Option<u16>,
+    // Editor 用の書き込みはグローバルの --port を使う。
+    // clap では global 引数と同名をサブコマンド側に定義できないため (`liminal init --port N` は同じ働き)。
+}
+
+#[derive(Args)]
+pub struct DoctorArgs {
+    /// probe に応答しなかったキャッシュエントリを削除する
+    #[arg(long)]
+    pub prune_stale: bool,
+}
+
+#[derive(Args)]
+pub struct SetPortArgs {
+    /// 書き込むポート (1..=65535)
+    // フィールド名がそのまま clap の引数 id になるため、global な --port と衝突しない名前にする。
+    #[arg(value_name = "PORT")]
+    pub value: u32,
+    /// runtimePort 側に書き込む
+    #[arg(long)]
+    pub runtime: bool,
+}
+
+#[derive(Args)]
+pub struct UnsetPortArgs {
+    /// runtimePort 側を削除する
+    #[arg(long)]
+    pub runtime: bool,
+}
+
+#[derive(Args)]
+pub struct RunArgs {
+    /// シナリオパス。glob (`*` `?` `[`) を含めると複数実行。--steps 使用時は省略する
+    pub path: Option<String>,
+
+    /// ad-hoc ステップを JSON で読み込む (`-` で stdin)
+    #[arg(long, value_name = "FILE_OR_DASH")]
+    pub steps: Option<String>,
+
+    /// JUnit XML レポートの出力先
+    #[arg(long, value_name = "PATH")]
+    pub report: Option<String>,
+}
 
 #[derive(Args)]
 pub struct CommandsArgs {
@@ -87,6 +168,8 @@ fn parse_key_val(s: &str) -> Result<(String, String), String> {
 
 // 単体テスト
 #[cfg(test)]
+// テスト名は日本語で書く方針のため、snake_case 検査から除外する
+#[allow(non_snake_case)]
 mod tests {
     use super::*;
     use clap::Parser;
@@ -196,10 +279,7 @@ mod tests {
         let cli = Cli::try_parse_from(["liminal", "exec", "Foo", "expr=a=b"]).unwrap();
         match cli.command {
             Command::Exec(args) => {
-                assert_eq!(
-                    args.args,
-                    vec![("expr".to_string(), "a=b".to_string())]
-                );
+                assert_eq!(args.args, vec![("expr".to_string(), "a=b".to_string())]);
             }
             _ => panic!("expected Exec"),
         }

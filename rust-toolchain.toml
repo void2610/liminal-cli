@@ -1,3 +1,5 @@
+# edition 2024 (>=1.85) と let-chains (>=1.88) を使うため、1.83 系では build できない。
+# ここはローカルで build / test を通した版に合わせてある。
 [toolchain]
-channel = "1.83.0"
+channel = "1.98.1"
 components = ["rustfmt", "clippy", "rust-analyzer"]
