@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use assert_cmd::Command;
 use tempfile::TempDir;
@@ -13,11 +14,30 @@ use tempfile::TempDir;
 /// - `$LP_TOKEN` / `$NO_COLOR` 等を空にしてユーザー設定を継承しない
 /// - `NO_COLOR=1` を明示して anstream の色出力を完全に抑制
 pub fn cmd() -> Command {
+    // 認証必須コマンドはトークンが無いと実行前に落ちるので、既定で渡しておく
+    let mut c = cmd_without_token();
+    c.env("LP_TOKEN", "test-token");
+    c
+}
+
+/// トークンを一切与えない版。未設定時の挙動を試すテストで使う。
+pub fn cmd_without_token() -> Command {
     let mut c = Command::cargo_bin("liminal").expect("バイナリ liminal を build できません");
     c.env_clear()
         .env("NO_COLOR", "1")
-        .env("PATH", std::env::var("PATH").unwrap_or_default());
+        .env("PATH", std::env::var("PATH").unwrap_or_default())
+        // HOME は必ず差し替える。env_clear() だけでは std::env::home_dir() が
+        // passwd から実ホームを拾ってしまい、利用者の ~/.liminal-palette/ を
+        // 読み書きしてしまう (ports.json がテストのダミーポートで汚れる)。
+        .env("HOME", isolated_home());
     c
+}
+
+/// テストバイナリごとに 1 つだけ作る使い捨て HOME。
+fn isolated_home() -> &'static Path {
+    static HOME: OnceLock<TempDir> = OnceLock::new();
+    HOME.get_or_init(|| TempDir::new().expect("TempDir を作れません"))
+        .path()
 }
 
 /// Unity プロジェクトに見える一時ディレクトリを作る。
