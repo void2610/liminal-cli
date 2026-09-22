@@ -61,7 +61,8 @@ pub(crate) fn run(
         let removed: usize = dead.iter().map(|p| cache.remove_port(*p)).sum();
         cache::save(&cache);
         println!();
-        println!("  {DIM}pruned {removed} stale cache entries{DIM:#}");
+        let unit = if removed == 1 { "entry" } else { "entries" };
+        println!("  {DIM}pruned {removed} stale cache {unit}{DIM:#}");
     }
     Ok(())
 }

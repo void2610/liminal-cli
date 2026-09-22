@@ -93,7 +93,11 @@ fn section_token() {
         Some(p) => {
             let state = match std::fs::read_to_string(&p) {
                 Ok(s) if s.trim().is_empty() => format!("{YELLOW}empty{YELLOW:#}"),
-                Ok(_) => format!("{GREEN}exists{GREEN:#}"),
+                // 中身そのものは出さず、設定されている手がかりとして長さだけ見せる
+                Ok(s) => format!(
+                    "{GREEN}exists{GREEN:#} ({} chars)",
+                    s.trim().chars().count()
+                ),
                 Err(_) => format!("{YELLOW}missing{YELLOW:#}"),
             };
             println!("  {state}  {DIM}{}{DIM:#}", p.display());
@@ -171,7 +175,7 @@ fn section_live_check(root: &Path, mode: Option<Mode>) {
     }
     for a in alive {
         println!(
-            "  {GREEN}●{GREEN:#} {} [{}] {} {DIM}{}{DIM:#}",
+            "  {GREEN}● reachable on http://127.0.0.1:{}{GREEN:#}  [{}] {} {DIM}{}{DIM:#}",
             a.port, a.mode, a.project_name, a.project_path
         );
     }

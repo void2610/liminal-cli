@@ -155,7 +155,9 @@ fn show(root: &Path, mode: Option<Mode>) -> Result<()> {
                 println!("  {DIM}{line}{DIM:#}");
             }
         }
-        Err(_) => println!("  {DIM}(no config file){DIM:#}"),
+        Err(_) => println!(
+            "  {DIM}(no LiminalPalette.json — IpcSettings.DefaultPort=7610 にフォールバック){DIM:#}"
+        ),
     }
 
     println!();

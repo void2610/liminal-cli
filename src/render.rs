@@ -21,7 +21,7 @@ fn render_health_text(body: &HealthResponse, url: &str) -> Result<()> {
 fn render_commands_text(body: &CommandsResponse) -> Result<()> {
     // フィルタ後 0 件のときは dim で告知して終了
     if body.commands.is_empty() {
-        println!("  {DIM}(no commands){DIM:#}");
+        println!("  {DIM}(コマンドなし){DIM:#}");
         return Ok(());
     }
 
