@@ -16,6 +16,7 @@ pub struct Cli {
     /// Editor 側か Play Mode 側かを指定する
     #[arg(long, global = true, value_name = "MODE")]
     pub mode: Option<ModeArg>,
+    /// Bearer トークン ($LP_TOKEN / ~/.liminal-palette/token より優先)
     #[arg(long, global = true, value_name = "TOKEN")]
     pub token: Option<String>,
     /// JSON を生のまま出力する
@@ -115,6 +116,22 @@ pub struct RunArgs {
     /// JUnit XML レポートの出力先
     #[arg(long, value_name = "PATH")]
     pub report: Option<String>,
+}
+
+impl Command {
+    /// Bearer トークンが要るサブコマンドか (SPEC §4 の一覧)。
+    /// `health` と、サーバを使わない `init` / `doctor` / `project` は不要。
+    pub(crate) fn requires_auth(&self) -> bool {
+        matches!(
+            self,
+            Command::Commands(_)
+                | Command::Exec(_)
+                | Command::Logs(_)
+                | Command::State(_)
+                | Command::Scenarios(_)
+                | Command::Run(_)
+        )
+    }
 }
 
 #[derive(Args)]

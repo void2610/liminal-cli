@@ -67,6 +67,15 @@ pub fn run(cli: Cli) -> Result<()> {
         _ => {}
     }
 
+    // 認証が要るコマンドはトークンが無い時点で落とす (SPEC §11)。
+    // サーバに投げて 401 を見るより、何を直せばよいかが分かりやすい。
+    let token = get_token(cli.token);
+    if cli.command.requires_auth() && token.is_none() {
+        anyhow::bail!(
+            "トークンが見つかりません。--token で渡すか、$LP_TOKEN か ~/.liminal-palette/token に設定してください"
+        );
+    }
+
     // 以降はサーバが要る。接続先を決めてから Client を組み立てる。
     let opts = DiscoveryOptions {
         base_url: cli.base_url.clone(),
@@ -77,8 +86,8 @@ pub fn run(cli: Cli) -> Result<()> {
     let resolved = discovery::resolve(&opts)?;
     let url = resolved.base_url.clone();
 
-    // token が None なら認証なしの Client (health 等は SPEC §6 で認証不要)
-    let client: Client = match get_token(cli.token) {
+    // health は認証不要なので Authorization を付けない (SPEC §4.1)。
+    let client: Client = match token.filter(|_| cli.command.requires_auth()) {
         Some(t) => Client::new(url.clone()).with_token(t),
         None => Client::new(url.clone()),
     };
