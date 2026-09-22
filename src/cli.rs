@@ -66,6 +66,41 @@ pub(crate) enum Command {
     Scenarios(ScenariosArgs),
     /// シナリオを実行する (named / glob / ad-hoc)
     Run(RunArgs),
+    /// Unity Test Runner を起動し、完了まで待って結果を表示する
+    Test(TestArgs),
+}
+
+/// `liminal test <mode>` の対象。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum TestMode {
+    Playmode,
+    Editmode,
+    /// 現在の結果を 1 回だけ取得する (実行は開始しない)
+    Result,
+}
+
+#[derive(Args)]
+pub struct TestArgs {
+    // フィールド名がそのまま clap の引数 id になるため、global な --mode と衝突しない名前にする。
+    /// playmode / editmode / result
+    #[arg(value_name = "MODE")]
+    pub test_mode: TestMode,
+
+    /// テスト full name の正規表現で絞り込む (省略で全件)
+    #[arg(long, value_name = "REGEX")]
+    pub filter: Option<String>,
+
+    /// 完了待ちのタイムアウト秒
+    #[arg(long, default_value_t = 600.0, value_name = "SEC")]
+    pub timeout: f64,
+
+    /// 結果 polling の間隔秒
+    #[arg(long, default_value_t = 1.0, value_name = "SEC")]
+    pub interval: f64,
+
+    /// 開始だけして完了を待たない
+    #[arg(long)]
+    pub no_wait: bool,
 }
 
 #[derive(Subcommand)]
@@ -138,6 +173,7 @@ impl Command {
                 | Command::State(_)
                 | Command::Scenarios(_)
                 | Command::Run(_)
+                | Command::Test(_)
         )
     }
 }

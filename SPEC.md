@@ -80,6 +80,7 @@ LiminalPalette Unity パッケージが立てる HTTP IPC サーバ (`/api/v1/*`
 | `state [PATH]` | 必要 | 必要 | LiminalObservableField スナップショット |
 | `scenarios [--filter PREFIX]` | 必要 | 必要 | シナリオ一覧 |
 | `run [PATH] [--steps FILE_OR_DASH] [--report PATH]` | 必要 | 必要 | シナリオ実行 (named / glob / ad-hoc) |
+| `test <playmode\|editmode\|result> [--filter REGEX]` | 必要 | 必要 | Unity Test Runner の起動と結果取得 |
 
 ### 4.1 `health`
 
@@ -286,6 +287,38 @@ ok  http://127.0.0.1:7610
 - 親ディレクトリが無ければ自動作成。
 
 `run` の exit code: 1 つでも失敗していれば 2、全部成功で 0。
+
+### 4.11 `test <playmode|editmode|result>`
+
+`POST /api/v1/tests/run` で Unity Test Runner を起動し、`GET /api/v1/tests/result` を polling して完了を待つ。
+
+引数:
+- 位置引数 `MODE` — `playmode` / `editmode` / `result`。`result` は実行を開始せず現在の状態を 1 回取るだけ。
+  (グローバルの `--mode editor|runtime` とは別物。引数 id が衝突しないよう内部では `test_mode` として持つ)
+- `--filter REGEX` — テスト full name の正規表現で絞り込み (省略で全件)。
+- `--timeout SEC` — 完了待ちの上限 (既定 600)。
+- `--interval SEC` — polling 間隔 (既定 1.0)。
+- `--no-wait` — 開始だけして完了を待たない。
+
+挙動:
+- `run` が **409 (既に実行中)** を返した場合、既定では進行中のランに相乗りして polling を続ける。
+  `--no-wait` 指定時は諦めて exit 2。
+- **PlayMode テストは DomainReload でサーバが一時的に落ちる**ため、polling 中の接続エラーは
+  タイムアウトまで正常系として握り、再試行する (ここを落とすと PlayMode テストが常に失敗扱いになる)。
+- `--json` はレスポンスを丸出し。
+
+出力 (テキスト):
+```
+PASS  Passed  [editmode]  (31.2s)
+  passed       : 744
+  failed       : 0
+  skipped      : 0
+  inconclusive : 0
+```
+失敗時は `FAIL` + `failures[]` を `✗ {name}` とメッセージで列挙する。
+サーバは先頭 N 件しか返さないので、`failed` より少なければその旨を dim で添える。
+
+exit code: 完了して `Passed` → 0、それ以外 → 2。`running` / `idle` は失敗ではないので 0。
 
 ## 5. Discovery アルゴリズム
 

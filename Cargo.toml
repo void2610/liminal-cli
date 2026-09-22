@@ -1,6 +1,6 @@
 [package]
 name = "liminal"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 repository = "https://github.com/void2610/liminal-cli"
 description = "LiminalPalette の HTTP API を叩く CLI"

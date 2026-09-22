@@ -61,6 +61,8 @@ liminal state Player/Health             # 観測フィールドの現在値
 liminal scenarios                       # シナリオ一覧
 liminal run Combat/EnemyDies            # シナリオ実行
 liminal run 'Battle/*' --report out.xml # glob 実行 + JUnit XML 出力
+liminal test editmode                   # Unity Test Runner を回して結果を待つ
+liminal test playmode --filter 'Auction.*'
 liminal doctor                          # 環境診断 (常に exit 0)
 ```
 

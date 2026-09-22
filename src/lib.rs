@@ -155,6 +155,9 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Run(args) => {
             commands::run::run(&client, &args, cli.json)?;
         }
+        Command::Test(args) => {
+            commands::test::run(&client, &args, cli.json)?;
+        }
     }
 
     Ok(())
