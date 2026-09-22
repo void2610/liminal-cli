@@ -184,6 +184,8 @@ pub(crate) fn save(cache: &PortCache) {
 }
 
 #[cfg(test)]
+// テスト名は日本語で書く方針のため、snake_case 検査から除外する
+#[allow(non_snake_case)]
 mod tests {
     use super::*;
 

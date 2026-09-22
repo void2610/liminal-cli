@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::cache::CacheEntry;
 
@@ -88,7 +88,7 @@ pub(crate) fn candidate_ports(
     }
 
     let mut out: Vec<u16> = Vec::new();
-    let mut push = |port: u16, out: &mut Vec<u16>| {
+    let push = |port: u16, out: &mut Vec<u16>| {
         if port >= 1 && !out.contains(&port) {
             out.push(port);
         }
@@ -185,7 +185,201 @@ impl Alive {
     }
 }
 
+/// alive 一覧を target / mode で絞り込み、1 つに決める (SPEC §5-7)。
+/// 決められない場合は利用者向けのヒント込みのエラーメッセージを返す。
+pub(crate) fn select_alive(
+    alive: Vec<Alive>,
+    target: Option<&str>,
+    mode: Option<Mode>,
+) -> Result<Alive, String> {
+    if alive.is_empty() {
+        return Err("Liminal Palette サーバーが見つかりません".to_string());
+    }
+
+    let listing = format_alive_list(&alive);
+    let filtered: Vec<Alive> = alive
+        .iter()
+        .filter(|a| a.matches_project(target) && a.matches_mode(mode))
+        .cloned()
+        .collect();
+
+    if filtered.is_empty() {
+        // target と mode のどちらで落ちたのかでメッセージを変える。
+        if let Some(t) = target {
+            return Err(format!(
+                "指定のプロジェクト '{t}' に一致する Unity サーバーが見つかりません。\n生存中:\n{listing}"
+            ));
+        }
+        if let Some(m) = mode {
+            return Err(format!(
+                "mode={} の Unity サーバーが生存していません。\n生存中:\n{listing}",
+                m.as_str()
+            ));
+        }
+        unreachable!("target も mode も未指定なら filtered は空にならない");
+    }
+
+    if filtered.len() == 1 {
+        return Ok(filtered.into_iter().next().expect("len == 1"));
+    }
+
+    // 2 件以上。何を指定すれば絞れるかを状況から判断してヒントにする。
+    let hint = disambiguation_hint(&filtered);
+    if target.is_none() && mode.is_none() {
+        return Err(format!(
+            "複数の Unity プロジェクトが起動中です。{hint} で対象を指定してください。\n生存中:\n{listing}"
+        ));
+    }
+    Err(format!(
+        "対象を 1 つに絞れませんでした。{hint} で対象を指定してください。\n生存中:\n{}",
+        format_alive_list(&filtered)
+    ))
+}
+
+// 絞り込めなかった候補群を見て、どのオプションを足せば決まるかを返す (SPEC §5-7)。
+fn disambiguation_hint(candidates: &[Alive]) -> &'static str {
+    let first = &candidates[0].project_path;
+    let same_path = candidates.iter().all(|a| &a.project_path == first);
+    if same_path {
+        // 同じプロジェクトで mode だけ違うなら mode で決まる。
+        let modes_differ = candidates.iter().any(|a| a.mode != candidates[0].mode);
+        if modes_differ {
+            return "--mode editor|runtime";
+        }
+        // 同じ path で mode も同じなら、ポートを直接指定するしかない。
+        return "--port";
+    }
+    "--project (または --mode)"
+}
+
+// エラーメッセージに載せる生存サーバ一覧。
+fn format_alive_list(alive: &[Alive]) -> String {
+    alive
+        .iter()
+        .map(|a| {
+            format!(
+                "  {} [{}] {} {}",
+                a.port, a.mode, a.project_name, a.project_path
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// discovery の入力。CLI のグローバルオプションと環境変数をまとめたもの。
+#[derive(Debug, Default, Clone)]
+pub(crate) struct DiscoveryOptions {
+    pub base_url: Option<String>,
+    pub port: Option<u16>,
+    pub project: Option<String>,
+    pub mode: Option<Mode>,
+}
+
+/// discovery の結果。`/health` の body は呼び出し側 (health コマンド) が再利用する。
+#[derive(Debug, Clone)]
+pub(crate) struct Resolved {
+    pub base_url: String,
+    pub health: Option<Map<String, Value>>,
+}
+
+/// ターゲットプロジェクトを解決する (SPEC §2)。
+/// `--project` の値がディレクトリとして実在すれば絶対パスに正規化し、そうでなければ名前として扱う。
+pub(crate) fn resolve_target(project: Option<&str>) -> Option<String> {
+    let raw = match project {
+        Some(p) => p.to_string(),
+        None => std::env::var("LP_PROJECT").ok().filter(|s| !s.is_empty())?,
+    };
+    match std::fs::canonicalize(&raw) {
+        Ok(p) if p.is_dir() => Some(p.to_string_lossy().to_string()),
+        _ => Some(raw),
+    }
+}
+
+/// 接続先を決める (SPEC §5)。
+pub(crate) fn resolve(opts: &DiscoveryOptions) -> anyhow::Result<Resolved> {
+    // --base-url 明示時は discovery をバイパスする。probe は best-effort で、失敗しても致命にしない。
+    if let Some(url) = &opts.base_url {
+        return Ok(Resolved {
+            base_url: url.clone(),
+            health: crate::http::probe_url(url, crate::http::BASE_URL_PROBE_TIMEOUT),
+        });
+    }
+
+    let target = resolve_target(opts.project.as_deref());
+    let preferred = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| detect_project(&cwd))
+        .map(|root| read_project_config(&root))
+        .unwrap_or_default();
+
+    let mut cache = crate::cache::load();
+    let cache_entries = cache.entries();
+
+    // キャッシュに target 一致のポートがあれば先に試す (SPEC §5-4)。当たればそこで確定。
+    if target.is_some() {
+        for e in cache_entries
+            .iter()
+            .filter(|e| opts.mode.is_none_or(|m| m.as_str() == e.mode))
+        {
+            let Some(body) = crate::http::probe_port(e.port, crate::http::PROBE_TIMEOUT) else {
+                continue;
+            };
+            let a = Alive::from_health(e.port, &body);
+            if a.matches_project(target.as_deref()) && a.matches_mode(opts.mode) {
+                record_and_save(&mut cache, &a);
+                return Ok(Resolved {
+                    base_url: base_url_for(a.port),
+                    health: Some(body),
+                });
+            }
+        }
+    }
+
+    // 候補ポートを総当たりで probe する。表示順を保つため候補順のまま集める。
+    let candidates = candidate_ports(opts.port, preferred, opts.mode, &cache_entries);
+    let mut alive: Vec<Alive> = Vec::new();
+    let mut bodies: Vec<(u16, Map<String, Value>)> = Vec::new();
+    for port in &candidates {
+        if let Some(body) = crate::http::probe_port(*port, crate::http::PROBE_TIMEOUT) {
+            alive.push(Alive::from_health(*port, &body));
+            bodies.push((*port, body));
+        }
+    }
+
+    if alive.is_empty() {
+        let ports = candidates
+            .iter()
+            .map(u16::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        anyhow::bail!("Liminal Palette サーバーが見つかりません (試したポート: {ports})");
+    }
+
+    let selected = select_alive(alive, target.as_deref(), opts.mode).map_err(anyhow::Error::msg)?;
+    record_and_save(&mut cache, &selected);
+    let health = bodies
+        .into_iter()
+        .find(|(p, _)| *p == selected.port)
+        .map(|(_, b)| b);
+    Ok(Resolved {
+        base_url: base_url_for(selected.port),
+        health,
+    })
+}
+
+pub(crate) fn base_url_for(port: u16) -> String {
+    format!("http://127.0.0.1:{port}")
+}
+
+// 採用したポートをキャッシュに書き戻す。保存失敗は握り潰す (SPEC §8)。
+fn record_and_save(cache: &mut crate::cache::PortCache, a: &Alive) {
+    cache.record(&a.project_path, &a.project_name, &a.mode, a.port);
+    crate::cache::save(cache);
+}
+
 #[cfg(test)]
+// テスト名は日本語で書く方針のため、snake_case 検査から除外する
+#[allow(non_snake_case)]
 mod tests {
     use super::*;
     use std::fs;
@@ -375,6 +569,132 @@ mod tests {
         assert!(a.matches_mode(None));
         assert!(a.matches_mode(Some(Mode::Runtime)));
         assert!(!a.matches_mode(Some(Mode::Editor)));
+    }
+
+    // ---- select_alive (SPEC §5-7) ----
+
+    fn al(port: u16, mode: &str, name: &str, path: &str) -> Alive {
+        let body = serde_json::json!({
+            "mode": mode, "projectName": name, "projectPath": path,
+            "version": "0.2.0", "commandCount": 1,
+        });
+        Alive::from_health(port, body.as_object().unwrap())
+    }
+
+    #[test]
+    fn 選択_alive0件はエラー() {
+        let e = select_alive(vec![], None, None).unwrap_err();
+        assert!(e.contains("見つかりません"), "{e}");
+    }
+
+    #[test]
+    fn 選択_alive1件はそのまま採用() {
+        let a = al(7610, "editor", "A", "/a");
+        assert_eq!(select_alive(vec![a.clone()], None, None).unwrap(), a);
+    }
+
+    #[test]
+    fn 選択_指定なしで2件以上は曖昧エラー() {
+        let e = select_alive(
+            vec![al(7610, "editor", "A", "/a"), al(7611, "editor", "B", "/b")],
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(e.contains("複数の Unity プロジェクトが起動中です"), "{e}");
+        // 生存中の一覧が添えられる
+        assert!(e.contains("7610 [editor] A /a"), "{e}");
+        assert!(e.contains("7611 [editor] B /b"), "{e}");
+    }
+
+    #[test]
+    fn 選択_projectで絞れる() {
+        let got = select_alive(
+            vec![al(7610, "editor", "A", "/a"), al(7611, "editor", "B", "/b")],
+            Some("B"),
+            None,
+        )
+        .unwrap();
+        assert_eq!(got.port, 7611);
+    }
+
+    #[test]
+    fn 選択_modeで絞れる() {
+        let got = select_alive(
+            vec![
+                al(7610, "editor", "A", "/a"),
+                al(7611, "runtime", "A", "/a"),
+            ],
+            None,
+            Some(Mode::Runtime),
+        )
+        .unwrap();
+        assert_eq!(got.port, 7611);
+    }
+
+    #[test]
+    fn 選択_target不一致はプロジェクト名入りのエラー() {
+        let e = select_alive(vec![al(7610, "editor", "A", "/a")], Some("Nope"), None).unwrap_err();
+        assert!(e.contains("指定のプロジェクト 'Nope'"), "{e}");
+        assert!(e.contains("生存中:"), "{e}");
+    }
+
+    #[test]
+    fn 選択_mode不一致はmode入りのエラー() {
+        let e = select_alive(
+            vec![al(7610, "editor", "A", "/a")],
+            None,
+            Some(Mode::Runtime),
+        )
+        .unwrap_err();
+        assert!(e.contains("mode=runtime"), "{e}");
+    }
+
+    #[test]
+    fn 選択_同一プロジェクトでmode違いなら_modeヒント() {
+        let e = select_alive(
+            vec![
+                al(7610, "editor", "A", "/a"),
+                al(7611, "runtime", "A", "/a"),
+            ],
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(e.contains("--mode editor|runtime"), "{e}");
+    }
+
+    #[test]
+    fn 選択_projectPath違いなら_projectヒント() {
+        let e = select_alive(
+            vec![al(7610, "editor", "A", "/a"), al(7611, "editor", "B", "/b")],
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(e.contains("--project"), "{e}");
+    }
+
+    #[test]
+    fn 選択_同一プロジェクト同一modeなら_portヒント() {
+        let e = select_alive(
+            vec![al(7610, "editor", "A", "/a"), al(7611, "editor", "A", "/a")],
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(e.contains("--port"), "{e}");
+    }
+
+    #[test]
+    fn 選択_フィルタ後も2件以上なら絞れないエラー() {
+        let e = select_alive(
+            vec![al(7610, "editor", "A", "/a"), al(7611, "editor", "A", "/a")],
+            Some("A"),
+            None,
+        )
+        .unwrap_err();
+        assert!(e.contains("絞れませんでした"), "{e}");
     }
 
     // <root>/ProjectSettings/LiminalPalette.json に raw を書く

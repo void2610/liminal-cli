@@ -1,5 +1,6 @@
 pub mod cache;
 pub mod cli;
+pub mod commands;
 pub mod discovery;
 pub mod error;
 pub mod http;
@@ -10,9 +11,9 @@ pub mod token;
 use std::collections::HashMap;
 
 use anyhow::Result;
-use cli::{Cli, Command};
-use discovery::detect_project;
-use http::{Client, CommandsResponse, DEFAULT_URL, HealthResponse};
+use cli::{Cli, Command, ModeArg};
+use discovery::{DiscoveryOptions, Mode};
+use http::{Client, CommandsResponse, HealthResponse};
 use render::{render_commands, render_health};
 use token::get_token;
 
@@ -24,12 +25,37 @@ use crate::{
     render::{render_exec, render_logs, render_scenarios, render_state_list, render_state_value},
 };
 
-pub fn run(cli: Cli) -> Result<()> {
-    let url: String;
-    match cli.base_url {
-        Some(u) => url = u,
-        None => url = DEFAULT_URL.to_string(),
+impl From<ModeArg> for Mode {
+    fn from(m: ModeArg) -> Self {
+        match m {
+            ModeArg::Editor => Mode::Editor,
+            ModeArg::Runtime => Mode::Runtime,
+        }
     }
+}
+
+pub fn run(cli: Cli) -> Result<()> {
+    let mode = cli.mode.map(Mode::from);
+
+    // サーバ不要のコマンド (SPEC §4) は discovery を走らせる前に処理する。
+    match cli.command {
+        Command::Init(args) => return commands::init::run(&args, cli.port, mode),
+        Command::Doctor(args) => {
+            return commands::doctor::run(&args, cli.project.as_deref(), mode, cli.port);
+        }
+        Command::Project(sub) => return commands::project::run(&sub, mode),
+        _ => {}
+    }
+
+    // 以降はサーバが要る。接続先を決めてから Client を組み立てる。
+    let opts = DiscoveryOptions {
+        base_url: cli.base_url.clone(),
+        port: cli.port,
+        project: cli.project.clone(),
+        mode,
+    };
+    let resolved = discovery::resolve(&opts)?;
+    let url = resolved.base_url.clone();
 
     // token が None なら認証なしの Client (health 等は SPEC §6 で認証不要)
     let client: Client = match get_token(cli.token) {
@@ -38,14 +64,14 @@ pub fn run(cli: Cli) -> Result<()> {
     };
 
     match cli.command {
+        // discovery 済みのコマンドはここには来ない
+        Command::Init(_) | Command::Doctor(_) | Command::Project(_) => unreachable!(),
         Command::Health => {
-            // ヘルスチェック
-            let h: HealthResponse = client.get_response::<HealthResponse>("/api/v1/health")?;
-            // プロジェクト探索 (cwd 取得失敗は致命にせず未検出扱い)
-            let dir = std::env::current_dir()
-                .ok()
-                .and_then(|cwd| detect_project(&cwd));
-
+            // discovery 中に取得済みの body があれば使い回す (probe と本リクエストの二度打ちを避ける)
+            let h: HealthResponse = match resolved.health {
+                Some(body) => serde_json::from_value(serde_json::Value::Object(body))?,
+                None => client.get_response::<HealthResponse>("/api/v1/health")?,
+            };
             render_health(&h, &url, cli.json)?;
         }
         Command::Commands(args) => {
@@ -99,6 +125,9 @@ pub fn run(cli: Cli) -> Result<()> {
                 res.scenarios.retain(|s| s.path.starts_with(&filter));
             }
             render_scenarios(&res, cli.json)?;
+        }
+        Command::Run(args) => {
+            commands::run::run(&client, &args, cli.json)?;
         }
     }
 
