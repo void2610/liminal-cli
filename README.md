@@ -7,9 +7,36 @@ Unity の Editor / Play Mode で動いているコマンドを、ターミナル
 
 ## インストール
 
+### Unity から (推奨)
+
+LiminalPalette を導入済みの Unity プロジェクトなら、Editor メニューの
+`Tools > LiminalPalette > Install CLI...` で自分のプラットフォーム向けバイナリが
+`~/.local/bin/liminal` に入る。
+
+### ビルド済みバイナリを直接落とす
+
+[Releases](https://github.com/void2610/liminal-cli/releases/latest) から自分のプラットフォームのものを取る。
+
 ```bash
-cargo build --release
-ln -sf "$PWD/target/release/liminal" ~/.local/bin/liminal
+# macOS (Apple Silicon) の例
+curl -fsSL -o ~/.local/bin/liminal \
+  https://github.com/void2610/liminal-cli/releases/latest/download/liminal-aarch64-apple-darwin
+chmod +x ~/.local/bin/liminal
+```
+
+| プラットフォーム | アセット名 |
+|---|---|
+| macOS (Apple Silicon) | `liminal-aarch64-apple-darwin` |
+| macOS (Intel) | `liminal-x86_64-apple-darwin` |
+| Linux (x86_64) | `liminal-x86_64-unknown-linux-gnu` |
+| Windows (x86_64) | `liminal-x86_64-pc-windows-msvc.exe` |
+
+### ソースから
+
+```bash
+cargo install --git https://github.com/void2610/liminal-cli
+# または
+cargo build --release && ln -sf "$PWD/target/release/liminal" ~/.local/bin/liminal
 ```
 
 ## セットアップ

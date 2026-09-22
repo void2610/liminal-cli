@@ -1,0 +1,79 @@
+name: Release
+
+# タグを打つとプラットフォーム別バイナリをビルドして Release に添付する。
+# Unity 側の Install CLI メニューは releases/latest/download/<asset 名> を直接取りに来るので、
+# アセットは tar/zip に包まず素の実行ファイルのまま上げる (C# 側で展開処理を持たなくて済む)。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename (unix)
+        if: runner.os != 'Windows'
+        run: |
+          strip "target/${{ matrix.target }}/release/liminal" || true
+          mv "target/${{ matrix.target }}/release/liminal" "liminal-${{ matrix.target }}"
+
+      - name: Rename (windows)
+        if: runner.os == 'Windows'
+        run: mv "target/${{ matrix.target }}/release/liminal.exe" "liminal-${{ matrix.target }}.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: liminal-${{ matrix.target }}
+          path: liminal-${{ matrix.target }}*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -lh dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # CHANGELOG があればそのタグの節を本文にする (無ければ自動生成に任せる)
+          gh release create "${{ github.ref_name }}" dist/* \
+            --title "${{ github.ref_name }}" \
+            --generate-notes
