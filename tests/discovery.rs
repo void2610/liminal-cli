@@ -191,16 +191,9 @@ fn discovery_port_明示時はキャッシュ早出しをしない() {
             .body(health_body("editor", "MyGame", "/dev/MyGame"));
     });
 
-    let home = TempDir::new().unwrap();
-    std::fs::create_dir_all(home.path().join(".liminal-palette")).unwrap();
-    std::fs::write(
-        home.path().join(".liminal-palette/ports.json"),
-        format!(
-            r#"{{"version":2,"projects":{{"/dev/MyGame":{{"projectName":"MyGame","ports":{{"editor":{}}}}}}}}}"#,
-            free_port()
-        ),
-    )
-    .unwrap();
+    // キャッシュには死んでいるポートを載せておく
+    let home = temp_home();
+    write_port_cache(home.path(), "/dev/MyGame", "MyGame", free_port());
 
     // キャッシュ上の (死んでいる) ポートに引っぱられず、--port が勝つ
     cmd()
