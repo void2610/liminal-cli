@@ -81,8 +81,8 @@ pub(crate) fn field_name(runtime: bool) -> &'static str {
 }
 
 fn set_port(root: &Path, args: &SetPortArgs) -> Result<()> {
-    if !(1..=65535).contains(&args.port) {
-        bail!("PORT は 1..=65535 の範囲で指定してください: {}", args.port);
+    if !(1..=65535).contains(&args.value) {
+        bail!("PORT は 1..=65535 の範囲で指定してください: {}", args.value);
     }
 
     // set-port は壊れた JSON に寛容。警告だけ出して上書きする (SPEC §4.4)。
@@ -96,11 +96,11 @@ fn set_port(root: &Path, args: &SetPortArgs) -> Result<()> {
 
     let key = field_name(args.runtime);
     let had_schema = fields.contains_key("$schema");
-    fields.insert(key.to_string(), Value::from(args.port));
+    fields.insert(key.to_string(), Value::from(args.value));
     write_config(root, &fields)?;
 
     let path = project_config_path(root);
-    println!("{GREEN}set{GREEN:#}  {key} = {}", args.port);
+    println!("{GREEN}set{GREEN:#}  {key} = {}", args.value);
     println!("  {DIM}{}{DIM:#}", path.display());
     if !had_schema {
         println!("  {DIM}$schema reference を追加しました{DIM:#}");

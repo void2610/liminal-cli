@@ -88,7 +88,9 @@ pub struct DoctorArgs {
 #[derive(Args)]
 pub struct SetPortArgs {
     /// 書き込むポート (1..=65535)
-    pub port: u32,
+    // フィールド名がそのまま clap の引数 id になるため、global な --port と衝突しない名前にする。
+    #[arg(value_name = "PORT")]
+    pub value: u32,
     /// runtimePort 側に書き込む
     #[arg(long)]
     pub runtime: bool,
