@@ -123,7 +123,7 @@ fn commands_filter_後_0件で_no_commands_を表示() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(no commands)"));
+        .stdout(predicate::str::contains("(コマンドなし)"));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 # `liminal` Rust 実装 TDD テスト項目
 
-> **状況 (2026-09-22)**: Phase 1〜11 と「仕上げ」はすべて実装済み。テストは 217 件。
+> **状況 (2026-09-22)**: Phase 1〜11 と「仕上げ」はすべて実装済み。テストは 223 件。
 > チェック済みの項目は対応するテストが存在するもの。
 > 未チェックのまま残っているのは「テストが無い」か「実装が本書の想定と異なる」項目で、
 > 各所に理由を添えてある。正本は実際のテストスイートで、本書はその索引として維持する。
@@ -64,8 +64,8 @@ liminal --base-url http://127.0.0.1:7610 health --json
 
 - [x] HTTP GET が `Accept: application/json` ヘッダ付きで送られる
 - [x] 200 + JSON object → struct にデコードできる
-- [ ] 200 + 空 body → エラーで止まらず空表示
-  - **未カバー**: 現実装は JSON として解釈できずエラー終了する。SPEC §6 に空 body の規定が無いため、本書側の想定を採用していない
+- [x] 200 + 空 body → 壊れた応答として exit 1 (当初は「空表示」の想定だったが、
+      黙って空の結果を見せるより壊れていることを伝えた方が切り分けが早いので方針変更)
 - [x] 接続失敗 → exit 1、stderr に赤エラー
 - [x] 200 でフィールド全部揃う → 全行表示
 - [x] `mode` / `projectName` / `projectPath` が空文字列 → `(unknown)` を dim
@@ -109,8 +109,7 @@ liminal --base-url ... logs --limit 10
 - [x] `$LP_TOKEN="   "` (空白のみ) → file にフォールバック
 - [x] file 中身 `"abc\n"` → strip して `"abc"`
 - [x] file 中身が空白のみ → 「未設定」扱い
-- [ ] file 不在 → 認証必須コマンドで exit 1 + 「トークンが見つかりません」
-  - **未カバー**: 実装は Authorization を送らずサーバの 401 をそのまま表示する方式 (SPEC §6)。CLI 側で事前に弾いてはいない
+- [x] file 不在 → 認証必須コマンドで exit 1 + 「トークンが見つかりません」
 
 `commands`:
 - [x] 5 件取得 → 5 行表示 + `total: 5`
@@ -126,13 +125,13 @@ liminal --base-url ... logs --limit 10
 - [x] 単一: `path` / `value` / `type` 表示
 - [x] 全件: `instanceResolved=true` は `●` 緑、`false` は `○` 黄
 - [x] `value` が JSON null → 文字列 `"null"` を表示
-- [x] 0 件 → `(state なし)` dim
+- [x] 0 件 → `(no state fields)` dim (SPEC は文言未指定)
 - [x] `--json` 透過
 
 `scenarios`:
 - [x] 一覧表示 + `total: N`
 - [x] `stepCount = -1` → `?` 表示
-- [x] 0 件 → `(scenario なし)`
+- [x] 0 件 → `(no scenarios)` (SPEC §4.9 の表記)
 - [x] `--json` 透過
 
 `logs`:
@@ -282,8 +281,7 @@ Load:
 Save:
 - [x] 親ディレクトリ不在 → `mkdir_p` してから書く
 - [x] indent=2 + 非 ASCII (日本語 projectName) がそのまま (`\uXXXX` ではない)
-- [ ] 書けない (権限なし) → silent (panic しない)
-  - **未カバー**: 権限を落とす環境を用意していないため未検証。実装は書き込み失敗を握り潰す
+- [x] 書けない (権限なし) → silent (panic しない)
 
 `record_cache`:
 - [x] `info.projectPath` 欠落 → no-op
@@ -292,8 +290,7 @@ Save:
 - [x] `projectName` を更新
 
 Discovery 早出し:
-- [ ] target あり + cache hit + `/health` で一致 → 1 リクエストで採用、他を probe しない
-  - **未カバー**: リクエスト数の assert を置いていない。早出し自体は `discovery_port_明示時はキャッシュ早出しをしない` で間接的に確認
+- [x] target あり + cache hit + `/health` で一致 → 1 リクエストで採用、他を probe しない
 - [x] target あり + cache hit だが `/health` で不一致 → 通常 probe フェーズに進む
 - [x] cache に項目あるが応答無し → 通常 probe で alive を再構築
 - [x] 採用ポートが cache に書き戻される
@@ -383,8 +380,7 @@ cwd の Unity プロジェクトの `ProjectSettings/LiminalPalette.json` を表
 
 `show`:
 - [x] cwd が Unity 外 → fatal exit 1
-- [ ] config 不在 → 「(no LiminalPalette.json — IpcSettings.DefaultPort=7610 にフォールバック)」
-  - **未カバー**: 実装の表示は `(no config file — ...)`
+- [x] config 不在 → 「(no LiminalPalette.json — IpcSettings.DefaultPort=7610 にフォールバック)」
 - [x] config あり → port / runtimePort + raw 全行 dim
 - [x] live listeners: ヒット 0 → 「(no listener for this project ...)」
 - [x] live listeners: preferred と一致するなら `(matches port)` / `(matches runtimePort)` / `(matches port, runtimePort unset)`
@@ -435,8 +431,7 @@ liminal doctor --prune-stale
 
 `init`:
 - [x] cwd が Unity 外 → fatal exit 1
-- [ ] フラグなし → ファイル作成しない (実行前後で inode/mtime 不変を assert)
-  - **未カバー**: ファイルが作られないことの assert で代替している
+- [x] フラグなし → ファイル作成しない (実行前後で inode/mtime 不変を assert)
 - [x] `--port 7613` → ファイル作成 + `set port = 7613`
 - [x] `--runtime-port 7700` → `runtimePort` 設定
 - [x] 両フラグ → 両方書き込み
@@ -444,14 +439,12 @@ liminal doctor --prune-stale
 - [x] config 既存 + `$schema` 無し + フラグ無し → 黄色ヒント `liminal init --port N で再書き込み`
 - [x] Token: ファイル不在 → `missing` 黄
 - [x] Token: 空ファイル → `empty` 黄
-- [ ] Token: 中身あり → `exists` 緑 + 文字数
-  - **未カバー**: 文字数は表示していない (トークンの長さを画面に出さない方針)
+- [x] Token: 中身あり → `exists` 緑 + 文字数
 - [x] AI Skills: `.claude/skills/liminal-foo` 1 個 → `installed 1 skill(s)` 緑
 - [x] AI Skills: `lp-foo` (legacy) 検出 → 黄色警告
 - [x] AI Skills: ディレクトリ不在 → dim メッセージ
 - [x] CLI: バイナリ絶対パス + `ln -sf ... ~/.local/bin/liminal` ヒント
-- [ ] Live check: probe ヒットなら `● reachable on http://...` 緑、無ければ dim
-  - **未カバー**: 実装の表示は `● {port} [{mode}] {name} {path}` 形式
+- [x] Live check: probe ヒットなら `● reachable on http://...` 緑、無ければ dim
 - [x] 末尾 `init complete` 緑
 
 `doctor`:

@@ -227,3 +227,19 @@ fn probe_は応答が遅いポートを生存扱いしない() {
         .code(1)
         .stderr(predicate::str::contains("見つかりません"));
 }
+
+#[test]
+fn 空bodyは壊れた応答として扱う() {
+    // 200 なのに body が空、は壊れたサーバ。黙って空表示せず理由を出して止まる
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/health");
+        then.status(200).body("");
+    });
+
+    cmd()
+        .args(["--base-url", &server.base_url(), "health"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("JSON として解釈できません"));
+}
