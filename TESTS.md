@@ -233,7 +233,11 @@ Discovery 統合:
 - [ ] alive 0 → exit 1 + `Liminal Palette サーバーが見つかりません (試したポート: ...)`
 - [ ] alive 1 → 採用、`base_url = http://127.0.0.1:{port}`
 - [ ] alive 2 (Phase 4 では未対応) → exit 1 + `複数の Unity プロジェクトが起動中です`
-- [ ] preferred port が立っていれば DEFAULT_PORTS まで probe しない (リクエスト数を assert)
+- [ ] preferred port が候補の先頭に来る (probe されることを assert)
+  - **注**: 当初ここは「preferred が立っていれば DEFAULT_PORTS まで probe しない」としていたが、
+    SPEC §5-5 は「候補を全部 probe してから alive を選ぶ」と定めており両立しない。
+    生存が複数あるかどうかを知らないと曖昧エラー (§5-7) を出せないため、SPEC 側に合わせて全 probe とした。
+    早期打ち切りをするのは target 指定時のキャッシュ経路 (§5-4) だけ。
 - [ ] `--port N` → そのポート 1 個だけ probe
 
 ---
