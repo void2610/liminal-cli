@@ -37,7 +37,8 @@ liminal run 'Battle/*' --report out.xml # glob 実行 + JUnit XML 出力
 liminal doctor                          # 環境診断 (常に exit 0)
 ```
 
-`--json` を付けるとレスポンスをそのまま出すので、`jq` に流せる。
+`--json` を付けるとサーバのレスポンスを**そのまま**出すので、`jq` に流せる。
+型に落とさず中継するため、サーバ側が後から増やしたフィールドもそのまま届く。
 
 ```bash
 liminal --json exec Player/Position/Get | jq -r .value
@@ -67,6 +68,15 @@ liminal --project MyGame --mode runtime health
 | 2 | サーバには届いたが実行が失敗した (`exec` / `run`) |
 
 `run` を glob で回した場合、1 つでも失敗すれば 2 になる。CI から使うときはこれを見る。
+
+## エラー表示
+
+サーバがエラーを返した場合、ステータスと**サーバ側のメッセージ**をそのまま出す。
+
+```
+$ liminal commands
+Error: HTTP 401: token が一致しません
+```
 
 ## 開発
 
