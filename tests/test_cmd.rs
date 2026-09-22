@@ -238,3 +238,69 @@ fn test_未対応のモードはエラー() {
         .assert()
         .code(1);
 }
+
+#[test]
+fn test_force_を_body_に乗せる() {
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(POST)
+            .path("/api/v1/tests/run")
+            .json_body_partial(r#"{"mode":"editmode","force":true}"#);
+        then.status(200)
+            .body(r#"{"mode":"editmode","filter":"all"}"#);
+    });
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/tests/result");
+        then.status(200).body(COMPLETED_PASS);
+    });
+
+    cmd()
+        .args([
+            "--base-url",
+            &server.base_url(),
+            "test",
+            "editmode",
+            "--force",
+            "--interval",
+            "0.05",
+        ])
+        .assert()
+        .code(0);
+
+    m.assert();
+}
+
+#[test]
+fn test_force_省略時は_body_に出さない() {
+    let server = MockServer::start();
+    // force を含まない body だけに一致する mock
+    let m = server.mock(|when, then| {
+        when.method(POST).path("/api/v1/tests/run").matches(|req| {
+            let body = req
+                .body
+                .as_ref()
+                .map(|b| String::from_utf8_lossy(b).to_string());
+            body.is_some_and(|b| !b.contains("force"))
+        });
+        then.status(200)
+            .body(r#"{"mode":"editmode","filter":"all"}"#);
+    });
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/tests/result");
+        then.status(200).body(COMPLETED_PASS);
+    });
+
+    cmd()
+        .args([
+            "--base-url",
+            &server.base_url(),
+            "test",
+            "editmode",
+            "--interval",
+            "0.05",
+        ])
+        .assert()
+        .code(0);
+
+    m.assert();
+}

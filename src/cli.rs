@@ -101,6 +101,10 @@ pub struct TestArgs {
     /// 開始だけして完了を待たない
     #[arg(long)]
     pub no_wait: bool,
+
+    /// 中断された実行の残骸 (Running のまま残った状態) を無視して開始する
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Subcommand)]

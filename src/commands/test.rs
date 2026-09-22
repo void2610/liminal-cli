@@ -27,6 +27,9 @@ pub(crate) fn run(client: &Client, args: &TestArgs, json_out: bool) -> Result<()
     if let Some(f) = &args.filter {
         req["filter"] = Value::from(f.clone());
     }
+    if args.force {
+        req["force"] = Value::from(true);
+    }
 
     // 既に実行中 (409) なら、待機モードでは進行中のランに相乗りする。
     match client.post_value(RUN_ENDPOINT, &req) {
@@ -60,6 +63,7 @@ pub(crate) fn run(client: &Client, args: &TestArgs, json_out: bool) -> Result<()
                     println!(
                         "{YELLOW}既にテスト実行中です (liminal test result で状況を確認できます){YELLOW:#}"
                     );
+                    println!("{DIM}中断された状態が残っている場合は --force で解除できます{DIM:#}");
                 }
                 return Err(ExecFailure.into());
             }
