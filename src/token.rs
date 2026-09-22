@@ -41,11 +41,7 @@ mod tests {
 
     #[test]
     fn token_arg_が_最優先() {
-        let r = resolve_token(
-            Some("arg".into()),
-            Some("env".into()),
-            Some("file".into()),
-        );
+        let r = resolve_token(Some("arg".into()), Some("env".into()), Some("file".into()));
         assert_eq!(r, Some("arg".into()));
     }
 

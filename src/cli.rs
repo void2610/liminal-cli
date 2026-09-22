@@ -196,10 +196,7 @@ mod tests {
         let cli = Cli::try_parse_from(["liminal", "exec", "Foo", "expr=a=b"]).unwrap();
         match cli.command {
             Command::Exec(args) => {
-                assert_eq!(
-                    args.args,
-                    vec![("expr".to_string(), "a=b".to_string())]
-                );
+                assert_eq!(args.args, vec![("expr".to_string(), "a=b".to_string())]);
             }
             _ => panic!("expected Exec"),
         }
