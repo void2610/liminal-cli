@@ -1,7 +1,8 @@
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{collections::HashMap, time::Duration};
-use ureq::{Agent, Error, RequestBuilder, typestate::WithoutBody};
+use ureq::{Agent, RequestBuilder, typestate::WithoutBody};
 
 pub(crate) struct Client {
     agent: Agent,
@@ -13,6 +14,9 @@ impl Client {
     pub(crate) fn new(base_url: String) -> Self {
         let config = Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(10)))
+            // 非 2xx を ureq のエラーにさせない。body に入っているサーバ側のメッセージを
+            // 読んでから HttpError に組み直すため (SPEC §6)。
+            .http_status_as_error(false)
             .build();
 
         Self {
@@ -27,52 +31,27 @@ impl Client {
         self
     }
 
-    pub(crate) fn get_response<T: serde::de::DeserializeOwned>(
-        self,
-        endpoint: &str,
-    ) -> Result<T, Error> {
-        let res = self.get(endpoint).call()?.body_mut().read_json::<T>();
-
-        {
-            let r = res?;
-            Ok(r)
-        }
+    /// GET して生の JSON を返す。`--json` はこの値をそのまま出すので、
+    /// サーバが後から増やしたフィールドも落とさない (SPEC §4.1 / §4.7 / §4.8)。
+    pub(crate) fn get_value(&self, endpoint: &str) -> Result<Value> {
+        let res = self.get(endpoint).call()?;
+        read_json_or_http_error(res)
     }
 
-    pub(crate) fn post_exec(
-        &self,
-        endpoint: &str,
-        body: &ExecRequest,
-    ) -> Result<ExecResponse, Error> {
-        let mut req = self.agent.post(self.base_url.clone() + endpoint);
-        if let Some(h) = self.auth_header() {
-            req = req.header("Authorization", h);
-        }
-        let res: ExecResponse = req.send_json(body)?.body_mut().read_json()?;
-        Ok(res)
-    }
-
-    /// 任意の JSON body を POST して JSON を受け取る (scenarios/run 用)。
-    pub(crate) fn post_json<T: serde::de::DeserializeOwned>(
-        &self,
-        endpoint: &str,
-        body: &Value,
-    ) -> Result<T, Error> {
+    /// 任意の JSON body を POST して生の JSON を返す。
+    pub(crate) fn post_value(&self, endpoint: &str, body: &Value) -> Result<Value> {
         let mut req = self.agent.post(self.base_url.clone() + endpoint);
         req = req.header("Accept", "application/json");
         if let Some(h) = self.auth_header() {
             req = req.header("Authorization", h);
         }
-        req.send_json(body)?.body_mut().read_json::<T>()
-    }
-
-    /// scenarios 一覧の取得 (&self で呼べる版。get_response は self を消費するため)。
-    pub(crate) fn get_scenarios(&self, endpoint: &str) -> Result<ScenariosResponse, Error> {
-        self.get(endpoint).call()?.body_mut().read_json()
+        read_json_or_http_error(req.send_json(body)?)
     }
 
     fn get(&self, endpoint: &str) -> RequestBuilder<WithoutBody> {
         let mut req = self.agent.get(self.base_url.clone() + endpoint);
+        // SPEC §6: Accept は常に送る。
+        req = req.header("Accept", "application/json");
         if let Some(h) = self.auth_header() {
             req = req.header("Authorization", h);
         }
@@ -86,6 +65,53 @@ impl Client {
         } else {
             Some(format!("Bearer {}", self.token))
         }
+    }
+}
+
+/// 非 2xx レスポンス。SPEC §6 の `HTTP {status}: {message}` 形式で表示する。
+#[derive(Debug)]
+pub struct HttpError {
+    pub status: u16,
+    pub message: String,
+}
+
+impl std::fmt::Display for HttpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HTTP {}: {}", self.status, self.message)
+    }
+}
+
+impl std::error::Error for HttpError {}
+
+/// 2xx なら JSON として読み、それ以外は body からメッセージを起こして HttpError にする。
+fn read_json_or_http_error(mut res: ureq::http::Response<ureq::Body>) -> Result<Value> {
+    let status = res.status().as_u16();
+    let body = res.body_mut().read_to_string().unwrap_or_default();
+
+    if (200..300).contains(&status) {
+        return serde_json::from_str::<Value>(&body)
+            .with_context(|| format!("レスポンスを JSON として解釈できません: {body}"));
+    }
+    Err(HttpError {
+        status,
+        message: error_message_from_body(&body),
+    }
+    .into())
+}
+
+/// エラー body からメッセージを取り出す。`{"error": "..."}` 形式を優先し、
+/// そうでなければ body をそのまま使う (SPEC §6)。
+fn error_message_from_body(body: &str) -> String {
+    if let Ok(Value::Object(m)) = serde_json::from_str::<Value>(body)
+        && let Some(Value::String(e)) = m.get("error")
+    {
+        return e.clone();
+    }
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        "(no body)".to_string()
+    } else {
+        trimmed.to_string()
     }
 }
 

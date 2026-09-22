@@ -8,12 +8,7 @@ use anstream::println;
 use anyhow::Result;
 use serde_json::Value;
 
-pub(crate) fn render_health(body: &HealthResponse, url: &str, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(body)?);
-        return Ok(());
-    }
-
+fn render_health_text(body: &HealthResponse, url: &str) -> Result<()> {
     println!("{GREEN}ok{GREEN:#}  {url}");
     println!("  version       : {}", body.version);
     println!("  mode          : {}", show_or_unknown(&body.mode));
@@ -23,12 +18,7 @@ pub(crate) fn render_health(body: &HealthResponse, url: &str, json: bool) -> Res
     Ok(())
 }
 
-pub(crate) fn render_commands(body: &CommandsResponse, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(body)?);
-        return Ok(());
-    }
-
+fn render_commands_text(body: &CommandsResponse) -> Result<()> {
     // フィルタ後 0 件のときは dim で告知して終了
     if body.commands.is_empty() {
         println!("  {DIM}(no commands){DIM:#}");
@@ -75,15 +65,7 @@ pub(crate) fn render_commands(body: &CommandsResponse, json: bool) -> Result<()>
     Ok(())
 }
 
-pub(crate) fn render_exec(body: &ExecResponse, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(body)?);
-        if !body.success {
-            return Err(ExecFailure.into());
-        }
-        return Ok(());
-    }
-
+fn render_exec_text(body: &ExecResponse) -> Result<()> {
     // ヘッダ行: success / failed と所要時間
     if body.success {
         println!(
@@ -132,12 +114,7 @@ pub(crate) fn render_exec(body: &ExecResponse, json: bool) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn render_scenarios(body: &ScenariosResponse, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(body)?);
-        return Ok(());
-    }
-
+fn render_scenarios_text(body: &ScenariosResponse) -> Result<()> {
     if body.scenarios.is_empty() {
         println!("  {DIM}(no scenarios){DIM:#}");
         return Ok(());
@@ -173,24 +150,14 @@ pub(crate) fn render_scenarios(body: &ScenariosResponse, json: bool) -> Result<(
     Ok(())
 }
 
-pub(crate) fn render_state_value(body: &StateValue, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(body)?);
-        return Ok(());
-    }
-
+fn render_state_value_text(body: &StateValue) -> Result<()> {
     println!("  {CYAN}{}{CYAN:#}", body.path);
     println!("  value : {}", value_or_null(&body.value));
     println!("  type  : {DIM}{}{DIM:#}", body.r#type);
     Ok(())
 }
 
-pub(crate) fn render_state_list(body: &StateList, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(body)?);
-        return Ok(());
-    }
-
+fn render_state_list_text(body: &StateList) -> Result<()> {
     if body.fields.is_empty() {
         println!("  {DIM}(no state fields){DIM:#}");
         return Ok(());
@@ -225,12 +192,7 @@ pub(crate) fn render_state_list(body: &StateList, json: bool) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn render_logs(body: &LogsResponse, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(body)?);
-        return Ok(());
-    }
-
+fn render_logs_text(body: &LogsResponse) -> Result<()> {
     if body.invocations.is_empty() {
         println!("  {DIM}(no invocations){DIM:#}");
         return Ok(());
@@ -273,6 +235,71 @@ pub(crate) fn render_logs(body: &LogsResponse, json: bool) -> Result<()> {
         body.total
     );
     Ok(())
+}
+
+// ---- `--json` は受け取った JSON をそのまま出す (SPEC §4.1 / §4.7 / §4.8) ----
+//
+// テキスト表示のときだけ型に落とす。型付きの構造体を再シリアライズして出すと、
+// サーバが後から増やしたフィールドが黙って消えてしまうため。
+
+/// `--json` 用。受け取った body をそのまま整形して出す。
+fn print_raw(v: &Value) -> Result<()> {
+    println!("{}", serde_json::to_string_pretty(v)?);
+    Ok(())
+}
+
+pub(crate) fn render_health(v: &Value, url: &str, json: bool) -> Result<()> {
+    if json {
+        return print_raw(v);
+    }
+    render_health_text(&serde_json::from_value(v.clone())?, url)
+}
+
+pub(crate) fn render_commands(v: &Value, json: bool) -> Result<()> {
+    if json {
+        return print_raw(v);
+    }
+    render_commands_text(&serde_json::from_value(v.clone())?)
+}
+
+pub(crate) fn render_exec(v: &Value, json: bool) -> Result<()> {
+    if json {
+        print_raw(v)?;
+        // JSON 出力でも exit code は success で決まる (SPEC §4.6)
+        if !v.get("success").and_then(Value::as_bool).unwrap_or(false) {
+            return Err(ExecFailure.into());
+        }
+        return Ok(());
+    }
+    render_exec_text(&serde_json::from_value(v.clone())?)
+}
+
+pub(crate) fn render_scenarios(v: &Value, json: bool) -> Result<()> {
+    if json {
+        return print_raw(v);
+    }
+    render_scenarios_text(&serde_json::from_value(v.clone())?)
+}
+
+pub(crate) fn render_state_value(v: &Value, json: bool) -> Result<()> {
+    if json {
+        return print_raw(v);
+    }
+    render_state_value_text(&serde_json::from_value(v.clone())?)
+}
+
+pub(crate) fn render_state_list(v: &Value, json: bool) -> Result<()> {
+    if json {
+        return print_raw(v);
+    }
+    render_state_list_text(&serde_json::from_value(v.clone())?)
+}
+
+pub(crate) fn render_logs(v: &Value, json: bool) -> Result<()> {
+    if json {
+        return print_raw(v);
+    }
+    render_logs_text(&serde_json::from_value(v.clone())?)
 }
 
 fn show_or_unknown(s: &str) -> String {

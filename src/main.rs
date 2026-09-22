@@ -1,5 +1,6 @@
+use anstream::eprintln;
 use clap::Parser;
-use liminal::{cli::Cli, error::ExecFailure, run};
+use liminal::{cli::Cli, error::ExecFailure, run, style::RED};
 
 fn main() {
     // clap の既定はパースエラーで exit 2 だが、SPEC §11 では 2 は「実行はされたが失敗」の意味。
@@ -17,7 +18,8 @@ fn main() {
         // ExecFailure は exec/run の success: false。詳細は render 側で出力済み
         Err(e) if e.is::<ExecFailure>() => 2,
         Err(e) => {
-            eprintln!("Error: {:#}", e);
+            // SPEC §10: 致命エラーは赤で出す (非 TTY / NO_COLOR では anstream が色を落とす)
+            eprintln!("{RED}Error: {:#}{RED:#}", e);
             1
         }
     };
