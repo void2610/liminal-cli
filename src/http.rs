@@ -121,6 +121,23 @@ pub(crate) const PROBE_TIMEOUT: Duration = Duration::from_millis(400);
 /// `--base-url` 明示時の best-effort probe タイムアウト (SPEC §2)。
 pub(crate) const BASE_URL_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// 複数ポートを並列に probe する。戻り値は入力と同じ並び (SPEC §12: 表示順は候補順を保つ)。
+/// ポート数はたかだか十数個なので、1 ポート 1 スレッドで十分。
+pub(crate) fn probe_all(ports: &[u16], timeout: Duration) -> Vec<Option<Map<String, Value>>> {
+    let mut out: Vec<Option<Map<String, Value>>> = (0..ports.len()).map(|_| None).collect();
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = ports
+            .iter()
+            .map(|p| scope.spawn(move || probe_port(*p, timeout)))
+            .collect();
+        for (slot, h) in out.iter_mut().zip(handles) {
+            // probe 内で panic することは想定していないが、1 本落ちても全体は続行する。
+            *slot = h.join().unwrap_or(None);
+        }
+    });
+    out
+}
+
 /// `127.0.0.1:{port}` の `/health` を叩く。
 /// 2xx かつ JSON object のときだけ Some。それ以外 (非 JSON / 配列 / 4xx / 接続不可 / タイムアウト) は None。
 pub(crate) fn probe_port(port: u16, timeout: Duration) -> Option<Map<String, Value>> {

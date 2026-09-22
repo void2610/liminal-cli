@@ -8,7 +8,7 @@ use crate::cache;
 use crate::cli::InitArgs;
 use crate::commands::project::{read_raw, require_project, write_config};
 use crate::discovery::{Alive, Mode, candidate_ports, project_config_path, read_project_config};
-use crate::http::{PROBE_TIMEOUT, probe_port};
+use crate::http::{PROBE_TIMEOUT, probe_all};
 use crate::style::{CYAN, DIM, GREEN, YELLOW};
 
 /// `liminal init`。フラグ無しなら read-only で、副作用は一切起こさない (SPEC §4.2)。
@@ -161,7 +161,8 @@ fn section_live_check(root: &Path, mode: Option<Mode>) {
 
     let alive: Vec<Alive> = ports
         .iter()
-        .filter_map(|p| probe_port(*p, PROBE_TIMEOUT).map(|b| Alive::from_health(*p, &b)))
+        .zip(probe_all(&ports, PROBE_TIMEOUT))
+        .filter_map(|(p, b)| b.map(|b| Alive::from_health(*p, &b)))
         .collect();
 
     if alive.is_empty() {
