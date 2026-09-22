@@ -1,7 +1,15 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+/// `--version` は版だけでなく出自も出す。手元のバイナリがどこの何版か、
+/// CLI 自身から辿れないと不具合の報告先が分からなくなるため。
+const LONG_VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    "\n",
+    env!("CARGO_PKG_REPOSITORY")
+);
+
 #[derive(Parser)]
-#[command(version, about)]
+#[command(version, long_version = LONG_VERSION, about)]
 pub struct Cli {
     // グローバルオプション (SPEC §3)
     /// ベース URL を直接指定する (discovery をバイパス)

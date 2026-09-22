@@ -33,8 +33,25 @@ fn サブコマンドのhelpも_exit0() {
 }
 
 #[test]
-fn version_は_exit0() {
-    cmd().arg("--version").assert().success();
+fn version_は版と出自を出す() {
+    // 手元のバイナリの報告先が CLI 自身から辿れること
+    cmd()
+        .arg("--version")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("liminal "))
+        .stdout(predicate::str::contains("github.com/void2610/liminal-cli"));
+}
+
+#[test]
+fn doctor_の先頭に_CLI_セクションが出る() {
+    let tmp = temp_project();
+    cmd()
+        .current_dir(tmp.path())
+        .args(["--port", &free_port().to_string(), "doctor"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("github.com/void2610/liminal-cli"));
 }
 
 #[test]

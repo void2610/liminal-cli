@@ -16,6 +16,8 @@ pub(crate) fn run(
     mode: Option<Mode>,
     port: Option<u16>,
 ) -> Result<()> {
+    section_cli();
+    println!();
     section_token();
     println!();
     let preferred = section_project(project, mode);
@@ -65,6 +67,18 @@ pub(crate) fn run(
         println!("  {DIM}pruned {removed} stale cache {unit}{DIM:#}");
     }
     Ok(())
+}
+
+// 不具合の報告先が分かるよう、CLI 自身の版と出自を先頭に出す。
+// サーバ (LiminalPalette) 側の不具合と切り分けるのにも要る。
+fn section_cli() {
+    println!("{CYAN}CLI{CYAN:#}");
+    println!("  liminal {}", env!("CARGO_PKG_VERSION"));
+    println!("  {DIM}{}{DIM:#}", env!("CARGO_PKG_REPOSITORY"));
+    match std::env::current_exe() {
+        Ok(p) => println!("  {DIM}{}{DIM:#}", p.display()),
+        Err(_) => println!("  {DIM}(バイナリパスを取得できません){DIM:#}"),
+    }
 }
 
 fn section_token() {

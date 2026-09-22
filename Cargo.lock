@@ -1148,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "liminal"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anstream 0.6.21",
  "anstyle",

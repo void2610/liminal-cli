@@ -1,7 +1,9 @@
 [package]
 name = "liminal"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
+repository = "https://github.com/void2610/liminal-cli"
+description = "LiminalPalette の HTTP API を叩く CLI"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
