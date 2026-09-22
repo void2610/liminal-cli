@@ -204,3 +204,95 @@ fn discovery_base_url指定は_discovery_をバイパスする() {
         .success()
         .stdout(predicate::str::contains("Direct"));
 }
+
+#[test]
+fn discovery_port_0_は拒否する() {
+    // u16 では 0 を弾けないので、範囲検証が別途効いている必要がある
+    cmd()
+        .args(["--port", "0", "health"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("1..=65535"));
+}
+
+#[test]
+fn discovery_port_明示時はキャッシュ早出しをしない() {
+    // キャッシュに載っている別ポートではなく、指定したポートだけを使うこと
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/health");
+        then.status(200)
+            .body(health_body("editor", "MyGame", "/dev/MyGame"));
+    });
+
+    let home = TempDir::new().unwrap();
+    std::fs::create_dir_all(home.path().join(".liminal-palette")).unwrap();
+    std::fs::write(
+        home.path().join(".liminal-palette/ports.json"),
+        format!(
+            r#"{{"version":2,"projects":{{"/dev/MyGame":{{"projectName":"MyGame","ports":{{"editor":{}}}}}}}}}"#,
+            free_port()
+        ),
+    )
+    .unwrap();
+
+    // キャッシュ上の (死んでいる) ポートに引っぱられず、--port が勝つ
+    cmd()
+        .env("HOME", home.path())
+        .args([
+            "--port",
+            &server.port().to_string(),
+            "--project",
+            "MyGame",
+            "health",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("MyGame"));
+}
+
+#[test]
+fn discovery_cwdのプロジェクトが既定のターゲットになる() {
+    // cwd が Unity プロジェクトなら、別プロジェクトのサーバは選ばれない (SPEC §2)
+    let server = MockServer::start();
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/health");
+        then.status(200)
+            .body(health_body("editor", "Other", "/dev/Other"));
+    });
+    let tmp = project_with_port(server.port());
+
+    cmd()
+        .current_dir(tmp.path())
+        .arg("health")
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("指定のプロジェクト"));
+}
+
+#[test]
+fn discovery_project指定時はそのディレクトリの_preferred_を使う() {
+    // cwd の外にあるプロジェクトを --project で指定しても、そのプロジェクトの
+    // preferred port が候補に入ること (既定ポートやキャッシュに無くても届く)
+    let server = MockServer::start();
+    let m = server.mock(|when, then| {
+        when.method(GET).path("/api/v1/health");
+        then.status(200)
+            .body(health_body("editor", "Far", "/dev/Far"));
+    });
+    let target = project_with_port(server.port());
+    let elsewhere = TempDir::new().unwrap();
+
+    cmd()
+        .current_dir(elsewhere.path())
+        .args(["--project", target.path().to_str().unwrap(), "health"])
+        .assert()
+        // target のパスは実在ディレクトリなので canonicalize され、/dev/Far とは一致しない。
+        // ここで確認したいのは「preferred port が probe されたか」。
+        .code(1);
+
+    assert!(
+        m.hits() >= 1,
+        "target の preferred port が probe されていない"
+    );
+}

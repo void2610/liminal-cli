@@ -34,8 +34,17 @@ impl From<ModeArg> for Mode {
     }
 }
 
+/// ポート番号は 1..=65535 (SPEC §3)。u16 では 0 を弾けないのでここで検証する。
+fn validate_port(port: Option<u16>, flag: &str) -> Result<()> {
+    match port {
+        Some(0) => anyhow::bail!("{flag} は 1..=65535 の範囲で指定してください: 0"),
+        _ => Ok(()),
+    }
+}
+
 pub fn run(cli: Cli) -> Result<()> {
     let mode = cli.mode.map(Mode::from);
+    validate_port(cli.port, "--port")?;
 
     // サーバ不要のコマンド (SPEC §4) は discovery を走らせる前に処理する。
     match cli.command {

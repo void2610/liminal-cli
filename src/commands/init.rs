@@ -13,6 +13,9 @@ use crate::style::{CYAN, DIM, GREEN, YELLOW};
 
 /// `liminal init`。フラグ無しなら read-only で、副作用は一切起こさない (SPEC §4.2)。
 pub(crate) fn run(args: &InitArgs, editor_port: Option<u16>, mode: Option<Mode>) -> Result<()> {
+    if args.runtime_port == Some(0) {
+        anyhow::bail!("--runtime-port は 1..=65535 の範囲で指定してください: 0");
+    }
     let root = require_project()?;
 
     println!("{CYAN}Project{CYAN:#}");

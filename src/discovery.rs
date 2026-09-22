@@ -287,7 +287,17 @@ pub(crate) struct Resolved {
 pub(crate) fn resolve_target(project: Option<&str>) -> Option<String> {
     let raw = match project {
         Some(p) => p.to_string(),
-        None => std::env::var("LP_PROJECT").ok().filter(|s| !s.is_empty())?,
+        None => match std::env::var("LP_PROJECT").ok().filter(|s| !s.is_empty()) {
+            Some(v) => v,
+            // 明示指定も環境変数も無ければ cwd から検出したプロジェクトを既定のターゲットにする。
+            // これが無いと、プロジェクト内で作業していても別プロジェクトのサーバが選ばれてしまう。
+            None => {
+                let root = std::env::current_dir()
+                    .ok()
+                    .and_then(|c| detect_project(&c))?;
+                return Some(root.to_string_lossy().to_string());
+            }
+        },
     };
     match std::fs::canonicalize(&raw) {
         Ok(p) if p.is_dir() => Some(p.to_string_lossy().to_string()),
@@ -306,26 +316,40 @@ pub(crate) fn resolve(opts: &DiscoveryOptions) -> anyhow::Result<Resolved> {
     }
 
     let target = resolve_target(opts.project.as_deref());
-    let preferred = std::env::current_dir()
-        .ok()
-        .and_then(|cwd| detect_project(&cwd))
-        .map(|root| read_project_config(&root))
+    // preferred port はターゲットのディレクトリから読む。--project で外から指定された場合に
+    // cwd の設定を見てしまうと、そのプロジェクトの preferred port を probe できない。
+    let preferred = target
+        .as_deref()
+        .map(Path::new)
+        .filter(|p| p.is_dir())
+        .map(read_project_config)
+        .or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|cwd| detect_project(&cwd))
+                .map(|root| read_project_config(&root))
+        })
         .unwrap_or_default();
 
     let mut cache = crate::cache::load();
     let cache_entries = cache.entries();
 
     // キャッシュに target 一致のポートがあれば先に試す (SPEC §5-4)。当たればそこで確定。
-    if target.is_some() {
-        for e in cache_entries
-            .iter()
-            .filter(|e| opts.mode.is_none_or(|m| m.as_str() == e.mode))
-        {
+    // --port 明示時はこの早出しを行わない (指定を無視して別ポートを選んでしまうため)。
+    if let Some(t) = target.as_deref()
+        && opts.port.is_none()
+    {
+        for e in cache_entries.iter().filter(|e| {
+            opts.mode.is_none_or(|m| m.as_str() == e.mode)
+                // probe 前にキャッシュ上の名前 / パスで絞る。無関係なプロジェクトを
+                // 1 件ごとに 400ms 待って試すと、早出しの意味が無くなる。
+                && (e.project_path == t || e.project_name == t)
+        }) {
             let Some(body) = crate::http::probe_port(e.port, crate::http::PROBE_TIMEOUT) else {
                 continue;
             };
             let a = Alive::from_health(e.port, &body);
-            if a.matches_project(target.as_deref()) && a.matches_mode(opts.mode) {
+            if a.matches_project(Some(t)) && a.matches_mode(opts.mode) {
                 record_and_save(&mut cache, &a);
                 return Ok(Resolved {
                     base_url: base_url_for(a.port),
