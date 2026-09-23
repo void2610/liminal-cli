@@ -304,3 +304,45 @@ fn test_force_省略時は_body_に出さない() {
 
     m.assert();
 }
+
+#[test]
+fn test_起動時の一時的な空応答は再試行する() {
+    // パッケージ更新直後など、DomainReload 中は本文が空で返ることがある。
+    // ここで諦めると「更新してすぐテスト」が失敗するので、短い間だけ粘る。
+    let server = MockServer::start();
+    let broken = server.mock(|when, then| {
+        when.method(POST).path("/api/v1/tests/run");
+        then.status(200).body("");
+    });
+    server.mock(|when, then| {
+        when.method(GET).path("/api/v1/tests/result");
+        then.status(200).body(COMPLETED_PASS);
+    });
+
+    // 1 回目は空応答。すぐには諦めないこと (timeout を短くして待ち時間を抑える)
+    let out = cmd()
+        .args([
+            "--base-url",
+            &server.base_url(),
+            "test",
+            "editmode",
+            "--timeout",
+            "2",
+            "--interval",
+            "0.05",
+        ])
+        .assert()
+        .get_output()
+        .clone();
+
+    // 空応答のまま 2 秒粘ってから失敗する (諦めが早すぎないこと)
+    assert!(
+        broken.hits() > 1,
+        "1 回で諦めている (hits={})",
+        broken.hits()
+    );
+    assert!(
+        !out.status.success(),
+        "空応答のままなので最終的には失敗する"
+    );
+}

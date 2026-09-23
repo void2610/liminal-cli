@@ -32,7 +32,7 @@ pub(crate) fn run(client: &Client, args: &TestArgs, json_out: bool) -> Result<()
     }
 
     // 既に実行中 (409) なら、待機モードでは進行中のランに相乗りする。
-    match client.post_value(RUN_ENDPOINT, &req) {
+    match start_run(client, &req, args) {
         Ok(resp) => {
             if !json_out {
                 let started = resp
@@ -76,6 +76,25 @@ pub(crate) fn run(client: &Client, args: &TestArgs, json_out: bool) -> Result<()
     poll_until_done(client, args, json_out)
 }
 
+// 実行開始。DomainReload の最中だと接続断や空応答になるので、短い間だけ再試行する。
+// ここで諦めると「パッケージを更新した直後にテストを回す」が高確率で失敗する。
+fn start_run(client: &Client, req: &Value, args: &TestArgs) -> Result<Value> {
+    let deadline = Instant::now() + Duration::from_secs_f64(args.timeout.min(30.0));
+    loop {
+        match client.post_value(RUN_ENDPOINT, req) {
+            Ok(v) => return Ok(v),
+            // 409 (既に実行中) は呼び出し側で扱うのでそのまま返す。
+            Err(e) if is_already_running(&e) => return Err(e),
+            Err(e) => {
+                if Instant::now() >= deadline {
+                    return Err(e);
+                }
+                std::thread::sleep(Duration::from_millis(500));
+            }
+        }
+    }
+}
+
 // 完了まで待つ。PlayMode テストは DomainReload でサーバが一時的に落ちるので、
 // 接続エラーはタイムアウトまで握りつぶして再試行する。
 fn poll_until_done(client: &Client, args: &TestArgs, json_out: bool) -> Result<()> {
@@ -95,7 +114,8 @@ fn poll_until_done(client: &Client, args: &TestArgs, json_out: bool) -> Result<(
                     bail!("timeout ({}s) — 最後の状態: {state}", args.timeout);
                 }
             }
-            // DomainReload 中は接続できない。タイムアウトまでは正常系として扱う。
+            // DomainReload 中は接続できない。接続できても本文が空で返ることがある
+            // (サーバが落ちる途中 / 起き上がる途中)。どちらもタイムアウトまでは正常系として扱う。
             Err(_) if Instant::now() < deadline => continue,
             Err(_) => bail!(
                 "timeout ({}s): 結果取得中に接続できませんでした",
